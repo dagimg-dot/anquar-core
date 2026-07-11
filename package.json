@@ -14,6 +14,7 @@
     "check": "bunx prettier --check src/ && bunx tsc --noEmit",
     "test": "bunx vitest run",
     "test:watch": "bunx vitest",
+    "bench": "bun run bench.ts",
     "dev": "bun --watch run src/index.ts"
   },
   "dependencies": {
