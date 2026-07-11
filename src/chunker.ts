@@ -58,8 +58,38 @@ export function splitSentences(text: string): string[] {
 }
 
 /**
+ * Break a string at the last word boundary before `maxChars`.
+ * Never splits mid-word. Falls back to hard character limit
+ * only if the string has no whitespace at all (single unbroken token).
+ */
+export function hardSplit(text: string, maxChars: number): string[] {
+  if (text.length <= maxChars) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > maxChars) {
+    const slice = remaining.slice(0, maxChars);
+    const lastSpace = slice.lastIndexOf(" ");
+
+    if (lastSpace === -1) {
+      // No word boundary — single long token, hard break at limit
+      chunks.push(remaining.slice(0, maxChars));
+      remaining = remaining.slice(maxChars);
+    } else {
+      chunks.push(remaining.slice(0, lastSpace));
+      remaining = remaining.slice(lastSpace + 1);
+    }
+  }
+
+  if (remaining.length > 0) chunks.push(remaining);
+  return chunks;
+}
+
+/**
  * Group sentences into chunks respecting min/max character bounds.
  * Images are always returned as standalone blocks.
+ * Sentences that exceed maxChars are hard-split at word boundaries.
  */
 export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
   const result: Block[] = [];
@@ -92,19 +122,23 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
       let blockCount = 0;
 
       for (const sentence of sentences) {
-        if (buffer.length + sentence.length + 1 > config.maxChars && buffer.length > 0) {
-          pending.push({
-            type: "text",
-            id: `c${chapter.index}-${block.position}-${blockCount++}`,
-            content: buffer.trim(),
-            charCount: buffer.trim().length,
-            chapterIndex: chapter.index,
-            position: block.position,
-          });
-          buffer = "";
-        }
+        // Hard-split oversize sentences at word boundaries
+        const parts = hardSplit(sentence, config.maxChars);
+        for (const part of parts) {
+          if (buffer.length + part.length + 1 > config.maxChars && buffer.length > 0) {
+            pending.push({
+              type: "text",
+              id: `c${chapter.index}-${block.position}-${blockCount++}`,
+              content: buffer.trim(),
+              charCount: buffer.trim().length,
+              chapterIndex: chapter.index,
+              position: block.position,
+            });
+            buffer = "";
+          }
 
-        buffer += (buffer ? " " : "") + sentence;
+          buffer += (buffer ? " " : "") + part;
+        }
       }
 
       if (buffer.length >= config.minChars) {
@@ -117,10 +151,22 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
           position: block.position,
         });
       } else if (pending.length > 0) {
-        // Small tail — merge into last pending block
+        // Merge into last pending block only if it stays within bounds
         const last = pending[pending.length - 1];
-        last.content += " " + buffer.trim();
-        last.charCount = last.content.length;
+        const merged = last.content + " " + buffer.trim();
+        if (merged.length <= config.maxChars) {
+          last.content = merged;
+          last.charCount = merged.length;
+        } else {
+          pending.push({
+            type: "text",
+            id: `c${chapter.index}-${block.position}-${blockCount++}`,
+            content: buffer.trim(),
+            charCount: buffer.trim().length,
+            chapterIndex: chapter.index,
+            position: block.position,
+          });
+        }
       } else if (buffer.trim()) {
         // Only block in this paragraph — emit even if under minChars
         pending.push({
