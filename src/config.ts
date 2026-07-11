@@ -4,6 +4,7 @@ import type { ImageResolver } from "./extractors/image/types.ts";
 
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { NcxTitleExtractor } from "./extractors/title/from-ncx.ts";
+import { NavTitleExtractor } from "./extractors/title/from-nav.ts";
 import { HeadingTitleExtractor } from "./extractors/title/from-heading.ts";
 import { TitleTagExtractor } from "./extractors/title/from-title.ts";
 import { TitleChain } from "./extractors/title/chain.ts";
@@ -28,6 +29,7 @@ export interface ParseOptions {
 
 export const DEFAULT_TITLE_EXTRACTOR = new TitleChain([
   new NcxTitleExtractor(),
+  new NavTitleExtractor(),
   new HeadingTitleExtractor(),
   new TitleTagExtractor(),
 ]);
