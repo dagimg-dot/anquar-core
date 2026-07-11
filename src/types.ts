@@ -14,7 +14,7 @@ export interface ImageBlock {
   id: string;
   src: string;
   alt: string;
-  data: ArrayBuffer | null; // raw bytes for CLI display / CDN upload
+  data: Uint8Array | null; // raw bytes for CLI display / CDN upload
   chapterIndex: number;
   position: number;
 }
