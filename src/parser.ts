@@ -42,10 +42,8 @@ export async function parseEpub(
   const opf = parseOpf(opfXml, opfRel);
 
   // Metadata
-  const bookTitle =
-    opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i)?.[1] || "Unknown";
-  const bookAuthor =
-    opfXml.match(/<dc:creator[^>]*>([^<]*)<\/dc:creator>/i)?.[1] || "Unknown";
+  const bookTitle = opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i)?.[1] || "Unknown";
+  const bookAuthor = opfXml.match(/<dc:creator[^>]*>([^<]*)<\/dc:creator>/i)?.[1] || "Unknown";
 
   // ── 2. Build XHTML content map (for title extractors) ────────────
   const xhtmlFiles = new Map<string, string>();
@@ -91,8 +89,7 @@ export async function parseEpub(
     if (rawBlocks.length === 0) continue;
 
     // Resolve title
-    const chapterTitle =
-      decodeEntities(titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`);
+    const chapterTitle = decodeEntities(titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`);
 
     // Resolve image blocks → include binary data
     const blocks: Block[] = rawBlocks.map((b, i) => {

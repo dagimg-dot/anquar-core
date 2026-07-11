@@ -59,9 +59,7 @@ async function cmdParse(
   let shown = 0;
 
   for (const ch of book.chapters) {
-    const chBlocks = blocks.filter(
-      (b) => b.chapterIndex === ch.index,
-    );
+    const chBlocks = blocks.filter((b) => b.chapterIndex === ch.index);
     if (chBlocks.length === 0) continue;
 
     console.log(`\n▌ ${ch.title}`);

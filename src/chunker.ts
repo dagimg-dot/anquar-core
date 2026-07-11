@@ -32,7 +32,7 @@ export function splitSentences(text: string): string[] {
   // Insert a split marker at every sentence boundary
   const marked = raw.replace(
     /(?<![A-Z][a-z]\.)(?<!\b\w\.\w\.)(?<!\.\.\.)([.!?。！？])(["'）」』]*)\s+(?=[\p{Lu}"'（「『]|$)/gu,
-    "$1$2\u0000SENT\u0000"
+    "$1$2\u0000SENT\u0000",
   );
 
   const candidates = marked
@@ -62,10 +62,7 @@ export function splitSentences(text: string): string[] {
  * Group sentences into chunks respecting min/max character bounds.
  * Images are always returned as standalone blocks.
  */
-export function chunkBook(
-  book: ParsedBook,
-  config: ChunkConfig
-): Block[] {
+export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
   const result: Block[] = [];
 
   for (const chapter of book.chapters) {

@@ -18,13 +18,24 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
   readonly name = "dom-walker";
 
   private static BLOCK_TAGS = new Set([
-    "p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
-    "blockquote", "li", "section", "figure", "td", "th", "pre",
+    "p",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "li",
+    "section",
+    "figure",
+    "td",
+    "th",
+    "pre",
   ]);
 
-  private static SKIP_TAGS = new Set([
-    "script", "style", "noscript", "title", "meta", "link",
-  ]);
+  private static SKIP_TAGS = new Set(["script", "style", "noscript", "title", "meta", "link"]);
 
   extract(html: string): RawBlock[] {
     const { document } = parseHTML(html);
@@ -86,9 +97,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
         const nonText = Array.from(kids).filter(
           (k: any) =>
             k.nodeType === 1 &&
-            !DomWalkerBlockExtractor.SKIP_TAGS.has(
-              (k.tagName || "").toLowerCase(),
-            ),
+            !DomWalkerBlockExtractor.SKIP_TAGS.has((k.tagName || "").toLowerCase()),
         );
         // If img is the only child, don't flush — just walk
         const firstChild = nonText[0] as any;
