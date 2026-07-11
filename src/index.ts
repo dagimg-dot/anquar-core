@@ -2,6 +2,7 @@
 
 import { parseEpub } from "./parser.ts";
 import { chunkBook } from "./chunker.ts";
+import type { ParseOptions } from "./config.ts";
 import type { Block, ChunkConfig } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 
@@ -21,6 +22,7 @@ OPTIONS
   --max-chars <number>   Max chars per chunk  (default: ${DEFAULT_CHUNK_CONFIG.maxChars})
   --no-headers           Omit chapter headers
   --sample <number>      Show first N blocks then stop  (default: all)
+  --debug                Print extractor tracing to stderr
 `);
 }
 
@@ -40,9 +42,10 @@ async function cmdParse(
   config: ChunkConfig,
   statsOnly: boolean,
   sample: number,
+  parseOptions: ParseOptions,
 ): Promise<void> {
-  console.error(`[buktok] ${filePath}`);
-  const book = await parseEpub(filePath);
+  console.error(`[buktok] ${filePath}${parseOptions.debug ? " (debug)" : ""}`);
+  const book = await parseEpub(filePath, parseOptions);
   const blocks = chunkBook(book, config);
 
   console.error(`  ${book.title} — ${book.author}`);
@@ -105,12 +108,17 @@ async function main(): Promise<void> {
   }
 
   const config: ChunkConfig = { ...DEFAULT_CHUNK_CONFIG };
+  const parseOptions: ParseOptions = { debug: false } as ParseOptions;
   let sample = 0;
 
   // Filter flags
   const positional = args.filter((a) => {
     if (a === "--no-headers") {
       config.includeChapterHeaders = false;
+      return false;
+    }
+    if (a === "--debug") {
+      parseOptions.debug = true;
       return false;
     }
     if (a.startsWith("--sample=")) {
@@ -147,7 +155,7 @@ async function main(): Promise<void> {
         printHelp();
         process.exit(1);
       }
-      await cmdParse(filePath, config, statsOnly, sample);
+      await cmdParse(filePath, config, statsOnly, sample, parseOptions);
       break;
     }
     default:
