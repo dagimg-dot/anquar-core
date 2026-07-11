@@ -1,0 +1,25 @@
+{
+  "name": "buktok",
+  "version": "0.1.0",
+  "description": "Book content chunked for short-form mobile consumption",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "buktok": "src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "bun --watch run src/index.ts"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "epub2": "^3.0.2",
+    "linkedom": "^0.18.13"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
