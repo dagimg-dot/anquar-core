@@ -1,10 +1,26 @@
+import type { StyleRun } from "../../types.ts";
+
 /**
  * Raw block extracted from XHTML — before chapter assignment
  * and image binary resolution.
  */
-export interface RawBlock {
-  type: "text" | "image";
-  content: string; // text content for text blocks, img src for image blocks
+export interface RawTextBlock {
+  type: "text";
+  content: string;
+  runs: StyleRun[];
+}
+
+export interface RawImageBlock {
+  type: "image";
+  content: string; // img src
+}
+
+export type RawBlock = RawTextBlock | RawImageBlock;
+
+/** Class → style mapping extracted from CSS files. */
+export interface StyleMapping {
+  bold: boolean;
+  italic: boolean;
 }
 
 /**
@@ -16,5 +32,5 @@ export interface RawBlock {
  */
 export interface BlockExtractor {
   readonly name: string;
-  extract(html: string): RawBlock[];
+  extract(html: string, cssMap?: Map<string, StyleMapping>): RawBlock[];
 }

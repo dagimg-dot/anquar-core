@@ -1,7 +1,16 @@
+/** A styled segment of text within a block. */
+export interface StyleRun {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+}
+
 export interface TextBlock {
   type: "text";
   id: string;
   content: string;
+  /** Per-character formatting via run-length encoding. */
+  runs: StyleRun[];
   charCount: number;
   chapterIndex: number;
   position: number; // ordinal within chapter

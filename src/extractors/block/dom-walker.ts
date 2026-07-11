@@ -1,5 +1,6 @@
 import { parseHTML } from "linkedom";
-import type { RawBlock, BlockExtractor } from "./types.ts";
+import type { StyleRun } from "../../types.ts";
+import type { RawBlock, BlockExtractor, StyleMapping } from "./types.ts";
 
 /**
  * Minimal node shape used by the DOM walker.
@@ -14,21 +15,56 @@ interface WalkNode {
   getAttribute?(name: string): string | null;
 }
 
+/** Merge adjacent runs with identical style flags. */
+function normalizeRuns(runs: StyleRun[]): StyleRun[] {
+  if (runs.length <= 1) return runs;
+  const out: StyleRun[] = [];
+  let cur = runs[0];
+  for (let i = 1; i < runs.length; i++) {
+    if (cur.bold === runs[i].bold && cur.italic === runs[i].italic) {
+      cur = { ...cur, text: cur.text + runs[i].text };
+    } else {
+      out.push(cur);
+      cur = runs[i];
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+/** Parse a CSS string for class → style mappings. */
+function parseCssForStyles(css: string): Map<string, StyleMapping> {
+  const map = new Map<string, StyleMapping>();
+  const ruleRe = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const cls = m[1];
+    const body = m[2];
+    const bold = /\bfont-weight\s*:\s*bold\b/i.test(body);
+    const italic = /\bfont-style\s*:\s*italic\b/i.test(body);
+    if (bold || italic) map.set(cls, { bold, italic });
+  }
+  return map;
+}
+
 /**
- * DOM-walking block extractor.
+ * DOM-walking block extractor with bold/italic tracking.
  *
  * Walks the parsed XHTML body tree and extracts interleaved
- * text + image segments. Text is flushed at each block-level
- * element boundary (<p>, <div>, <h1-6>, etc.) and at <img> tags.
+ * text + image segments. Text is emitted as StyleRun[] with
+ * computed bold/italic flags from:
+ *   1. Semantic HTML tags (<strong>, <b>, <em>, <i>)
+ *   2. Inline style attributes (font-weight, font-style)
+ *   3. CSS class names resolved against a pre-parsed map
  *
- * Handles:
- *  - Inline <img> tags (flushes text before, emits image block)
- *  - Block elements wrapping a single image (treats as image block)
- *  - <br> and <hr> as segment boundaries
- *  - Script/style/noscript content stripped
+ * Handles nested/inherited styling — style flags propagate
+ * through the DOM tree via the recursive walker.
  */
 export class DomWalkerBlockExtractor implements BlockExtractor {
   readonly name = "dom-walker";
+
+  private static BOLD_TAGS = new Set(["b", "strong"]);
+  private static ITALIC_TAGS = new Set(["i", "em"]);
 
   private static BLOCK_TAGS = new Set([
     "p",
@@ -50,18 +86,31 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
   private static SKIP_TAGS = new Set(["script", "style", "noscript", "title", "meta", "link"]);
 
-  extract(html: string): RawBlock[] {
+  extract(html: string, externalCss?: Map<string, StyleMapping>): RawBlock[] {
     const { document } = parseHTML(html);
     const body = document.querySelector("body");
     if (!body) return [];
 
+    // Build CSS class map: merge external (from parser) with inline <style>
+    const cssMap = new Map(externalCss);
+    for (const st of document.querySelectorAll("style")) {
+      const parsed = parseCssForStyles(st.textContent || "");
+      for (const [k, v] of parsed) {
+        if (!cssMap.has(k)) cssMap.set(k, v); // inline wins over external
+      }
+    }
+
     const blocks: RawBlock[] = [];
-    const buf: string[] = [];
+    const runs: StyleRun[] = [];
 
     const flush = () => {
-      const t = buf.join(" ").replace(/\s+/g, " ").trim();
-      if (t) blocks.push({ type: "text", content: t });
-      buf.length = 0;
+      if (runs.length === 0) return;
+      const norm = normalizeRuns(runs);
+      const content = norm.map((r) => r.text).join("");
+      if (content.trim()) {
+        blocks.push({ type: "text", content, runs: norm });
+      }
+      runs.length = 0;
     };
 
     const isSingleImageWrapper = (n: WalkNode): boolean => {
@@ -74,23 +123,48 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       return nonText.length === 1 && nonText[0]?.tagName?.toLowerCase() === "img";
     };
 
-    const walk = (n: WalkNode | null, _insideBlock: boolean) => {
+    const computeStyle = (n: WalkNode, inheritedBold: boolean, inheritedItalic: boolean) => {
+      let bold = inheritedBold;
+      let italic = inheritedItalic;
+      const tag = (n.tagName || "").toLowerCase();
+
+      if (DomWalkerBlockExtractor.BOLD_TAGS.has(tag)) bold = true;
+      if (DomWalkerBlockExtractor.ITALIC_TAGS.has(tag)) italic = true;
+
+      const styleAttr = n.getAttribute?.("style") || "";
+      if (/\bfont-weight\s*:\s*bold\b/i.test(styleAttr)) bold = true;
+      if (/\bfont-style\s*:\s*italic\b/i.test(styleAttr)) italic = true;
+
+      const classAttr = n.getAttribute?.("class") || "";
+      if (classAttr && cssMap.size > 0) {
+        for (const cls of classAttr.split(/\s+/)) {
+          const s = cssMap.get(cls);
+          if (s) {
+            if (s.bold) bold = true;
+            if (s.italic) italic = true;
+          }
+        }
+      }
+
+      return { bold, italic };
+    };
+
+    const walk = (n: WalkNode | null, inheritedBold: boolean, inheritedItalic: boolean) => {
       if (!n) return;
 
       if (n.nodeType === 3) {
         const t = (n.textContent || "").trim();
-        if (t) buf.push(t);
+        if (t) runs.push({ text: t, bold: inheritedBold, italic: inheritedItalic });
         return;
       }
 
       if (n.nodeType !== 1) return;
 
       const tag = (n.tagName || "").toLowerCase();
-
       if (DomWalkerBlockExtractor.SKIP_TAGS.has(tag)) return;
 
       if (tag === "br") {
-        if (buf.length > 0) buf.push(" ");
+        if (runs.length > 0) runs.push({ text: " ", bold: false, italic: false });
         return;
       }
 
@@ -107,20 +181,20 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       }
 
       const isBlock = DomWalkerBlockExtractor.BLOCK_TAGS.has(tag);
+      const { bold, italic } = computeStyle(n, inheritedBold, inheritedItalic);
 
-      if (isBlock && buf.length > 0 && !isSingleImageWrapper(n)) {
+      if (isBlock && runs.length > 0 && !isSingleImageWrapper(n)) {
         flush();
       }
 
       for (const c of n.childNodes ?? []) {
-        walk(c, isBlock);
+        walk(c, bold, italic);
       }
 
       if (isBlock) flush();
     };
 
-    // linkedom's types diverge from DOM — cast at entry point only
-    walk(body as unknown as WalkNode, false);
+    walk(body as unknown as WalkNode, false, false);
     flush();
 
     return blocks;

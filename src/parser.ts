@@ -7,7 +7,23 @@ import { getOpfPath } from "./epub/container.ts";
 import { parseOpf } from "./epub/opf.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ImageResolverContext } from "./extractors/image/types.ts";
+import type { StyleMapping } from "./extractors/block/types.ts";
 import { decodeEntities } from "./utils/entities.ts";
+
+/** Minimal CSS class → style parser. */
+function parseCssMap(css: string): Map<string, StyleMapping> {
+  const map = new Map<string, StyleMapping>();
+  const ruleRe = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const cls = m[1];
+    const body = m[2];
+    const bold = /\bfont-weight\s*:\s*bold\b/i.test(body);
+    const italic = /\bfont-style\s*:\s*italic\b/i.test(body);
+    if (bold || italic) map.set(cls, { bold, italic });
+  }
+  return map;
+}
 
 /**
  * Parse an EPUB file into structured chapters with interleaved
@@ -60,6 +76,21 @@ export async function parseEpub(
     spineMap.push({ href: xhtmlPath, itemId: sp.idref });
   }
 
+  // 2b. Build CSS class → style map from all CSS files in the manifest
+  const cssMap = new Map<string, StyleMapping>();
+  for (const item of opf.manifest.values()) {
+    if (item.mediaType === "text/css") {
+      const cssPath = zip.resolvePath(opf.opfDir, item.href);
+      const css = zip.readText(cssPath);
+      if (css) {
+        const parsed = parseCssMap(css);
+        for (const [k, v] of parsed) {
+          if (!cssMap.has(k)) cssMap.set(k, v);
+        }
+      }
+    }
+  }
+
   // 3. Extract chapter titles
   const titleParams: TitleExtractorParams = { zip, opf, opfXml, xhtmlFiles };
   const titleMap = await opts.titleExtractor.extract(titleParams);
@@ -82,7 +113,7 @@ export async function parseEpub(
     const html = zip.readText(xhtmlPath);
     if (!html) continue;
 
-    const rawBlocks = opts.blockExtractor.extract(html);
+    const rawBlocks = opts.blockExtractor.extract(html, cssMap);
     if (rawBlocks.length === 0) continue;
 
     const chapterTitle = decodeEntities(titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`);
@@ -93,6 +124,7 @@ export async function parseEpub(
           type: "text",
           id: `c${chapterIndex}-${i}`,
           content: b.content,
+          runs: b.runs,
           charCount: b.content.length,
           chapterIndex,
           position: i,
