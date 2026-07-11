@@ -116,8 +116,9 @@ async function run() {
     let book: ParsedBook;
     try {
       book = await parseEpub(file);
-    } catch (e: any) {
-      assert(false, `${name}: parse threw: ${e.message}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      assert(false, `${name}: parse threw: ${msg}`);
       continue;
     }
 
@@ -171,4 +172,7 @@ async function run() {
   }
 }
 
-await run();
+run().catch((e) => {
+  console.error("Test harness crashed:", e);
+  process.exit(1);
+});

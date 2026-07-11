@@ -89,9 +89,6 @@ function printStats(blocks: Block[], chapterCount: number): void {
   const img = blocks.filter((b) => b.type === "image");
   const failed = img.filter((b) => !b.data).length;
   const lens = txt.map((b) => b.charCount);
-  const min = Math.min(...lens);
-  const max = Math.max(...lens);
-  const avg = Math.round(lens.reduce((a, b) => a + b, 0) / lens.length);
 
   console.log(`── stats ──`);
   console.log(`  chapters:   ${chapterCount}`);
@@ -101,7 +98,15 @@ function printStats(blocks: Block[], chapterCount: number): void {
   } else {
     console.log(`  images:     ${img.length}`);
   }
-  console.log(`  chunk size: ${min}–${max} (avg ${avg}) chars`);
+
+  if (lens.length > 0) {
+    const min = Math.min(...lens);
+    const max = Math.max(...lens);
+    const avg = Math.round(lens.reduce((a, b) => a + b, 0) / lens.length);
+    console.log(`  chunk size: ${min}–${max} (avg ${avg}) chars`);
+  } else {
+    console.log(`  chunk size: (no text blocks)`);
+  }
 }
 
 async function main(): Promise<void> {
