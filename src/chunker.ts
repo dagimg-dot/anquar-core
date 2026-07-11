@@ -1,5 +1,7 @@
 import type { ParsedBook, Block, TextBlock, ChunkConfig } from "./types.ts";
 
+const HEADER_WRAP_LEN = "── ".length + " ──".length;
+
 /**
  * Split text into sentence-sized pieces using punctuation boundaries.
  *
@@ -71,7 +73,7 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
         type: "text",
         id: `ch-${chapter.index}`,
         content: `── ${chapter.title} ──`,
-        charCount: chapter.title.length + 6,
+        charCount: chapter.title.length + HEADER_WRAP_LEN,
         chapterIndex: chapter.index,
         position: -1,
       });
@@ -81,21 +83,18 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
 
     for (const block of chapter.blocks) {
       if (block.type === "image") {
-        // Flush pending text blocks before an image
-        result.push(...flushPending(pending, config));
+        result.push(...pending);
         pending = [];
         result.push(block);
         continue;
       }
 
-      // Split text into sentences
       const sentences = splitSentences(block.content);
 
       let buffer = "";
       let blockCount = 0;
 
       for (const sentence of sentences) {
-        // If adding this sentence exceeds maxChars, flush the buffer
         if (buffer.length + sentence.length + 1 > config.maxChars && buffer.length > 0) {
           pending.push({
             type: "text",
@@ -111,7 +110,6 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
         buffer += (buffer ? " " : "") + sentence;
       }
 
-      // Flush remainder
       if (buffer.length >= config.minChars) {
         pending.push({
           type: "text",
@@ -139,13 +137,8 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
       }
     }
 
-    result.push(...flushPending(pending, config));
+    result.push(...pending);
   }
 
   return result;
-}
-
-function flushPending(pending: TextBlock[], _config: ChunkConfig): TextBlock[] {
-  // Future: apply overlap logic, deduplication, etc.
-  return pending;
 }

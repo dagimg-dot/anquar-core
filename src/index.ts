@@ -6,6 +6,9 @@ import type { ParseOptions } from "./config.ts";
 import type { Block, ChunkConfig } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 
+const BLOCK_PREVIEW_MAX = 140;
+const SEPARATOR_WIDTH = 48;
+
 // ─── CLI ────────────────────────────────────────────────────────────
 
 function printHelp(): void {
@@ -32,7 +35,10 @@ function formatBlock(b: Block, idx: number, total: number): void {
     const size = b.data ? ` ${b.data.byteLength} bytes` : " no data";
     console.log(`${p} ██ IMAGE ██ ${b.src}${size}`);
   } else {
-    const txt = b.content.length > 140 ? b.content.slice(0, 137) + "..." : b.content;
+    const txt =
+      b.content.length > BLOCK_PREVIEW_MAX
+        ? b.content.slice(0, BLOCK_PREVIEW_MAX - 3) + "..."
+        : b.content;
     console.log(`${p} ${txt}  (${b.charCount}c)`);
   }
 }
@@ -63,7 +69,7 @@ async function cmdParse(
     if (chBlocks.length === 0) continue;
 
     console.log(`\n▌ ${ch.title}`);
-    console.log(`▌ ${"─".repeat(Math.min(ch.title.length, 48))}`);
+    console.log(`▌ ${"─".repeat(Math.min(ch.title.length, SEPARATOR_WIDTH))}`);
 
     for (const b of chBlocks) {
       if (sample > 0 && shown >= sample) break;

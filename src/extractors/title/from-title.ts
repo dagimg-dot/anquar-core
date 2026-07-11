@@ -15,6 +15,8 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  *  - The <title> is identical to the book title (likely front/back matter)
  *  - The <title> is empty
  */
+const MAX_TITLE_LENGTH = 60;
+
 export class TitleTagExtractor implements TitleExtractor {
   readonly name = "title-tag";
 
@@ -61,8 +63,7 @@ export class TitleTagExtractor implements TitleExtractor {
         ?.replace(/\.x?html?$/, "")
     )
       return true;
-    // Too long to be a chapter title (over ~60 chars is likely metadata)
-    if (text.length > 60) return true;
+    if (text.length > MAX_TITLE_LENGTH) return true;
     return false;
   }
 }
