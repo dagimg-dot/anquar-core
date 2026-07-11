@@ -1,10 +1,18 @@
 import { parseHTML } from "linkedom";
 import type { RawBlock, BlockExtractor } from "./types.ts";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// linkedom returns mock DOM nodes that duck-type to a simple shape.
-// A precise type adds noise without value here.
-type DomNode = any;
+/**
+ * Minimal node shape used by the DOM walker.
+ * linkedom returns objects that duck-type to this interface —
+ * using DOM's built-in types would create incompatibilities.
+ */
+interface WalkNode {
+  nodeType: number;
+  tagName?: string;
+  textContent?: string | null;
+  childNodes?: WalkNode[];
+  getAttribute?(name: string): string | null;
+}
 
 /**
  * DOM-walking block extractor.
@@ -56,17 +64,17 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       buf.length = 0;
     };
 
-    const isSingleImageWrapper = (n: DomNode): boolean => {
+    const isSingleImageWrapper = (n: WalkNode): boolean => {
       const kids = n.childNodes ?? [];
       const nonText = kids.filter(
-        (k: DomNode) =>
+        (k) =>
           k.nodeType === 1 &&
           !DomWalkerBlockExtractor.SKIP_TAGS.has((k.tagName || "").toLowerCase()),
       );
       return nonText.length === 1 && nonText[0]?.tagName?.toLowerCase() === "img";
     };
 
-    const walk = (n: DomNode | null, _insideBlock: boolean) => {
+    const walk = (n: WalkNode | null, _insideBlock: boolean) => {
       if (!n) return;
 
       if (n.nodeType === 3) {
@@ -111,7 +119,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       if (isBlock) flush();
     };
 
-    walk(body, false);
+    // linkedom's types diverge from DOM — cast at entry point only
+    walk(body as unknown as WalkNode, false);
     flush();
 
     return blocks;
