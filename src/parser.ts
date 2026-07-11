@@ -7,6 +7,7 @@ import { getOpfPath } from "./epub/container.ts";
 import { parseOpf } from "./epub/opf.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ImageResolverContext } from "./extractors/image/types.ts";
+import { decodeEntities } from "./utils/entities.ts";
 
 // ─── Public API ─────────────────────────────────────────────────────
 
@@ -41,7 +42,6 @@ export async function parseEpub(
   }
   const opf = parseOpf(opfXml, opfRel);
 
-  // Metadata
   const bookTitle = opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i)?.[1] || "Unknown";
   const bookAuthor = opfXml.match(/<dc:creator[^>]*>([^<]*)<\/dc:creator>/i)?.[1] || "Unknown";
 
@@ -84,14 +84,11 @@ export async function parseEpub(
     const html = zip.readText(xhtmlPath);
     if (!html) continue;
 
-    // Extract raw blocks (text + image references)
     const rawBlocks = opts.blockExtractor.extract(html);
     if (rawBlocks.length === 0) continue;
 
-    // Resolve title
     const chapterTitle = decodeEntities(titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`);
 
-    // Resolve image blocks → include binary data
     const blocks: Block[] = rawBlocks.map((b, i) => {
       if (b.type === "text") {
         return {
@@ -104,7 +101,6 @@ export async function parseEpub(
         } as const;
       }
 
-      // Resolve image
       const imgCtx: ImageResolverContext = {
         zip,
         opf,
@@ -137,24 +133,4 @@ export async function parseEpub(
   }
 
   return { title: decodeEntities(bookTitle), author: decodeEntities(bookAuthor), chapters };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#821[67];/g, "'")
-    .replace(/&#821[12];/g, "–")
-    .replace(/&#821[23];/g, "—")
-    .replace(/&#8230;/g, "…")
-    .replace(/&#x201[89];/g, "'")
-    .replace(/&#x201[34];/g, "–")
-    .replace(/&#x2014;/g, "—")
-    .replace(/&#x2026;/g, "…")
-    .replace(/&#160;/g, " ")
-    .replace(/&#x00A0;/g, " ");
 }
