@@ -9,8 +9,6 @@ import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 const BLOCK_PREVIEW_MAX = 140;
 const SEPARATOR_WIDTH = 48;
 
-// ─── CLI ────────────────────────────────────────────────────────────
-
 function printHelp(): void {
   console.log(`
 buktok — chunk EPUBs for short-form reading
@@ -101,8 +99,6 @@ function printStats(blocks: Block[], chapterCount: number): void {
   console.log(`  chunk size: ${min}–${max} (avg ${avg}) chars`);
 }
 
-// ─── Entry point ────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -115,7 +111,6 @@ async function main(): Promise<void> {
   const parseOptions: ParseOptions = { debug: false } as ParseOptions;
   let sample = 0;
 
-  // Filter flags
   const positional = args.filter((a) => {
     if (a === "--no-headers") {
       config.includeChapterHeaders = false;

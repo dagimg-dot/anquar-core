@@ -1,5 +1,3 @@
-// ─── Core block types ───────────────────────────────────────────────
-
 export interface TextBlock {
   type: "text";
   id: string;
@@ -21,8 +19,6 @@ export interface ImageBlock {
 
 export type Block = TextBlock | ImageBlock;
 
-// ─── Parser output ──────────────────────────────────────────────────
-
 export interface ParsedChapter {
   index: number;
   title: string;
@@ -34,8 +30,6 @@ export interface ParsedBook {
   author: string;
   chapters: ParsedChapter[];
 }
-
-// ─── Chunking configuration ─────────────────────────────────────────
 
 export interface ChunkConfig {
   /** Minimum characters per text chunk (merge short sentences up to this) */

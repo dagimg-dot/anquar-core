@@ -24,11 +24,8 @@ export function splitSentences(text: string): string[] {
     /\b(?:Dr|Mr|Mrs|Ms|St|vs|etc|i\.e|e\.g|dept|approx|Jr|Sr|Prof|Capt|Lt|Col|Gen|Sgt|p\.|pp\.|vol|fig|al|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$/i;
 
   const raw = text
-    // Normalize line breaks
     .replace(/\r\n/g, "\n")
-    // Protect ellipsis (never a sentence boundary)
     .replace(/\.\.\./g, "\u0000ELLIPSIS\u0000")
-    // Force split on paragraph breaks
     .replace(/\n\n+/g, "\u0000PARA\u0000");
 
   // Insert a split marker at every sentence boundary

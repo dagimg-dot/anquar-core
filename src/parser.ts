@@ -9,8 +9,6 @@ import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ImageResolverContext } from "./extractors/image/types.ts";
 import { decodeEntities } from "./utils/entities.ts";
 
-// ─── Public API ─────────────────────────────────────────────────────
-
 /**
  * Parse an EPUB file into structured chapters with interleaved
  * text and image blocks.
@@ -34,7 +32,7 @@ export async function parseEpub(
   };
   const zip = new EpubZip(filePath);
 
-  // ── 1. Locate and parse OPF ──────────────────────────────────────
+  // 1. Locate and parse OPF
   const opfRel = getOpfPath(zip);
   const opfXml = zip.readText(opfRel);
   if (!opfXml) {
@@ -45,7 +43,7 @@ export async function parseEpub(
   const bookTitle = opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i)?.[1] || "Unknown";
   const bookAuthor = opfXml.match(/<dc:creator[^>]*>([^<]*)<\/dc:creator>/i)?.[1] || "Unknown";
 
-  // ── 2. Build XHTML content map (for title extractors) ────────────
+  // 2. Build XHTML content map (for title extractors)
   const xhtmlFiles = new Map<string, string>();
   const spineMap: { href: string; itemId: string }[] = [];
 
@@ -62,7 +60,7 @@ export async function parseEpub(
     spineMap.push({ href: xhtmlPath, itemId: sp.idref });
   }
 
-  // ── 3. Extract chapter titles ────────────────────────────────────
+  // 3. Extract chapter titles
   const titleParams: TitleExtractorParams = { zip, opf, opfXml, xhtmlFiles };
   const titleMap = await opts.titleExtractor.extract(titleParams);
 
@@ -73,7 +71,7 @@ export async function parseEpub(
     }
   }
 
-  // ── 4. Process spine → blocks ────────────────────────────────────
+  // 4. Process spine → blocks
   const chapters: ParsedChapter[] = [];
   let chapterIndex = 0;
 
