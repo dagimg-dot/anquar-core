@@ -87,6 +87,7 @@ async function cmdParse(
 function printStats(blocks: Block[], chapterCount: number): void {
   const txt = blocks.filter((b): b is Extract<Block, { type: "text" }> => b.type === "text");
   const img = blocks.filter((b) => b.type === "image");
+  const failed = img.filter((b) => !b.data).length;
   const lens = txt.map((b) => b.charCount);
   const min = Math.min(...lens);
   const max = Math.max(...lens);
@@ -95,7 +96,11 @@ function printStats(blocks: Block[], chapterCount: number): void {
   console.log(`── stats ──`);
   console.log(`  chapters:   ${chapterCount}`);
   console.log(`  text:       ${txt.length}`);
-  console.log(`  images:     ${img.length}`);
+  if (failed > 0) {
+    console.log(`  images:     ${img.length} (${failed} unresolved)`);
+  } else {
+    console.log(`  images:     ${img.length}`);
+  }
   console.log(`  chunk size: ${min}–${max} (avg ${avg}) chars`);
 }
 
