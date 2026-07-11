@@ -10,16 +10,18 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
+    "format": "bunx prettier --write src/",
+    "check": "bunx prettier --check src/ && bunx tsc --noEmit",
     "dev": "bun --watch run src/index.ts"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
-    "epub2": "^3.0.2",
     "linkedom": "^0.18.13"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^22.0.0",
+    "prettier": "^3.9.5",
     "typescript": "^5.7.0"
   }
 }
