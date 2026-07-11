@@ -1,6 +1,11 @@
 import { parseHTML } from "linkedom";
 import type { RawBlock, BlockExtractor } from "./types.ts";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// linkedom returns mock DOM nodes that duck-type to a simple shape.
+// A precise type adds noise without value here.
+type DomNode = any;
+
 /**
  * DOM-walking block extractor.
  *
@@ -51,10 +56,19 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       buf.length = 0;
     };
 
-    const walk = (n: any, _insideBlock: boolean) => {
+    const isSingleImageWrapper = (n: DomNode): boolean => {
+      const kids = n.childNodes ?? [];
+      const nonText = kids.filter(
+        (k: DomNode) =>
+          k.nodeType === 1 &&
+          !DomWalkerBlockExtractor.SKIP_TAGS.has((k.tagName || "").toLowerCase()),
+      );
+      return nonText.length === 1 && nonText[0]?.tagName?.toLowerCase() === "img";
+    };
+
+    const walk = (n: DomNode | null, _insideBlock: boolean) => {
       if (!n) return;
 
-      // Text node
       if (n.nodeType === 3) {
         const t = (n.textContent || "").trim();
         if (t) buf.push(t);
@@ -65,53 +79,35 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
       const tag = (n.tagName || "").toLowerCase();
 
-      // Skip non-content
       if (DomWalkerBlockExtractor.SKIP_TAGS.has(tag)) return;
 
-      // <br> → word break
       if (tag === "br") {
         if (buf.length > 0) buf.push(" ");
         return;
       }
 
-      // <hr> → explicit block boundary
       if (tag === "hr") {
         flush();
         return;
       }
 
-      // <img> → image block
       if (tag === "img") {
         flush();
-        const src = n.getAttribute("src") || "";
+        const src = n.getAttribute?.("src") || "";
         blocks.push({ type: "image", content: src });
         return;
       }
 
       const isBlock = DomWalkerBlockExtractor.BLOCK_TAGS.has(tag);
 
-      // If entering a new block with buffer content, flush first
-      if (isBlock && buf.length > 0) {
-        // Check for single-image wrapper
-        const kids = n.childNodes || [];
-        const nonText = Array.from(kids).filter(
-          (k: any) =>
-            k.nodeType === 1 &&
-            !DomWalkerBlockExtractor.SKIP_TAGS.has((k.tagName || "").toLowerCase()),
-        );
-        // If img is the only child, don't flush — just walk
-        const firstChild = nonText[0] as any;
-        if (!(nonText.length === 1 && firstChild?.tagName?.toLowerCase() === "img")) {
-          flush();
-        }
+      if (isBlock && buf.length > 0 && !isSingleImageWrapper(n)) {
+        flush();
       }
 
-      // Walk children
-      for (const c of n.childNodes || []) {
+      for (const c of n.childNodes ?? []) {
         walk(c, isBlock);
       }
 
-      // Flush at block boundary so each paragraph is its own block
       if (isBlock) flush();
     };
 
