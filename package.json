@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "format": "bunx prettier --write src/",
     "check": "bunx prettier --check src/ && bunx tsc --noEmit",
+    "test": "bunx vitest run",
+    "test:watch": "bunx vitest",
     "dev": "bun --watch run src/index.ts"
   },
   "dependencies": {
