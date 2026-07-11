@@ -8,6 +8,8 @@ import type { ParsedOpf } from "../../epub/opf.ts";
 export interface TitleExtractorParams {
   zip: EpubZip;
   opf: ParsedOpf;
+  /** Raw OPF XML text for extractors that need to read metadata directly. */
+  opfXml: string;
   /** All XHTML content documents keyed by their manifest href. */
   xhtmlFiles: Map<string, string>;
 }

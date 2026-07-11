@@ -5,6 +5,7 @@ import type { ImageResolver } from "./extractors/image/types.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { NcxTitleExtractor } from "./extractors/title/from-ncx.ts";
 import { HeadingTitleExtractor } from "./extractors/title/from-heading.ts";
+import { TitleTagExtractor } from "./extractors/title/from-title.ts";
 import { TitleChain } from "./extractors/title/chain.ts";
 import { ManifestImageResolver } from "./extractors/image/via-manifest.ts";
 import { RelativeImageResolver } from "./extractors/image/via-relative.ts";
@@ -28,6 +29,7 @@ export interface ParseOptions {
 export const DEFAULT_TITLE_EXTRACTOR = new TitleChain([
   new NcxTitleExtractor(),
   new HeadingTitleExtractor(),
+  new TitleTagExtractor(),
 ]);
 
 export const DEFAULT_IMAGE_RESOLVER = new ImageChain([
