@@ -22,7 +22,6 @@ export class HeadingTitleExtractor implements TitleExtractor {
       const body = document.querySelector("body");
       if (!body) continue;
 
-      // Find first h1 or h2
       const heading = body.querySelector("h1") || body.querySelector("h2");
       if (!heading) continue;
 

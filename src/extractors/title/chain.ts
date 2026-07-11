@@ -24,7 +24,6 @@ export class TitleChain implements TitleExtractor {
     for (const ext of this.extractors) {
       const titles = await ext.extract(params);
       for (const [href, title] of titles) {
-        // Only set if not already claimed by an earlier extractor
         if (!merged.has(href)) {
           merged.set(href, title);
         }
