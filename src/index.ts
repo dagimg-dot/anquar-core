@@ -46,7 +46,7 @@ async function cmdParse(
   config: ChunkConfig,
   statsOnly: boolean,
   sample: number,
-  parseOptions: ParseOptions,
+  parseOptions: Partial<ParseOptions>,
 ): Promise<void> {
   console.error(`[buktok] ${filePath}${parseOptions.debug ? " (debug)" : ""}`);
   const book = await parseEpub(filePath, parseOptions);
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
   }
 
   const config: ChunkConfig = { ...DEFAULT_CHUNK_CONFIG };
-  const parseOptions: ParseOptions = { debug: false } as ParseOptions;
+  const parseOptions: Partial<ParseOptions> = { debug: false };
   let sample = 0;
 
   const positional = args.filter((a) => {
