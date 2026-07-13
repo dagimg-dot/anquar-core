@@ -1,11 +1,11 @@
 {
-  "name": "buktok",
+  "name": "anquar-core",
   "version": "0.1.0",
-  "description": "Book content chunked for short-form mobile consumption",
+  "description": "Book content chunker — replaces mindless scrolling with meaningful scrolling",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
-    "buktok": "src/index.ts"
+    "anquar": "src/index.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",

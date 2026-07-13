@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Benchmarks the actual CLI on all sample EPUBs.
- * Runs `buktok parse <file.epub> --stats` as a subprocess and times it.
+ * Runs `anquar parse <file.epub> --stats` as a subprocess and times it.
  * This includes Bun's startup time, parsing, chunking, and stats generation.
  *
  * Usage: bun run bench.ts

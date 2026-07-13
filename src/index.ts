@@ -11,12 +11,12 @@ const SEPARATOR_WIDTH = 48;
 
 function printHelp(): void {
   console.log(`
-buktok — chunk EPUBs for short-form reading
+anquar — chunk EPUBs for short-form reading
 
 USAGE
-  buktok parse <file.epub>              Parse and chunk an EPUB
-  buktok parse <file.epub> --stats      Show block statistics only
-  buktok help                           Show this message
+  anquar parse <file.epub>              Parse and chunk an EPUB
+  anquar parse <file.epub> --stats      Show block statistics only
+  anquar help                           Show this message
 
 OPTIONS
   --min-chars <number>   Min chars per chunk  (default: ${DEFAULT_CHUNK_CONFIG.minChars})
@@ -48,7 +48,7 @@ async function cmdParse(
   sample: number,
   parseOptions: Partial<ParseOptions>,
 ): Promise<void> {
-  console.error(`[buktok] ${filePath}${parseOptions.debug ? " (debug)" : ""}`);
+  console.error(`[anquar] ${filePath}${parseOptions.debug ? " (debug)" : ""}`);
   const book = await parseEpub(filePath, parseOptions);
   const blocks = chunkBook(book, config);
 
