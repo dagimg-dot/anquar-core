@@ -10,6 +10,18 @@ import type { ImageResolverContext } from "./extractors/image/types.ts";
 import type { StyleMapping } from "./extractors/block/types.ts";
 import { decodeEntities } from "./utils/entities.ts";
 
+/** Chapter titles that indicate front matter. */
+const FM_TITLES = new Set([
+  "cover",
+  "title page",
+  "copyright",
+  "contents",
+  "dedication",
+  "epigraph",
+  "acknowledgments",
+  "acknowledgements",
+]);
+
 /** Minimal CSS class → style parser. */
 function parseCssMap(css: string): Map<string, StyleMapping> {
   const map = new Map<string, StyleMapping>();
@@ -154,10 +166,22 @@ export async function parseEpub(
       } as const;
     });
 
+    const textBlocks = blocks.filter((b) => b.type === "text");
+    const wordCount = textBlocks.reduce((s, b) => s + b.content.split(/\s+/).length, 0);
+    const titleLower = chapterTitle
+      .toLowerCase()
+      .replace(/[:\-–—].*$/, "")
+      .trim();
+    const frontMatter =
+      FM_TITLES.has(titleLower) ||
+      chapterTitle === bookTitle ||
+      (chapterIndex < 3 && textBlocks.length < 3 && wordCount < 30);
+
     chapters.push({
       index: chapterIndex,
       title: chapterTitle,
       blocks,
+      frontMatter,
     });
     chapterIndex++;
   }

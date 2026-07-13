@@ -32,6 +32,8 @@ export interface ParsedChapter {
   index: number;
   title: string;
   blocks: Block[];
+  /** True if this chapter is likely front matter (cover, title, copyright, TOC, etc.) */
+  frontMatter: boolean;
 }
 
 export interface ParsedBook {
