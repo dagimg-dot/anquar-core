@@ -33,11 +33,6 @@ function normalizeRuns(runs: StyleRun[]): StyleRun[] {
   return out;
 }
 
-/** Parse a CSS string for class → style mappings (delegates to shared parser). */
-function parseCssForStyles(css: string): Map<string, StyleMapping> {
-  return parseCssStyles(css);
-}
-
 /**
  * DOM-walking block extractor with bold/italic tracking.
  *
@@ -90,7 +85,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
     // Build CSS class map: merge external (from parser) with inline <style>
     const cssMap = new Map(externalCss);
     for (const st of doc.querySelectorAll("style")) {
-      const parsed = parseCssForStyles(st.textContent || "");
+      const parsed = parseCssStyles(st.textContent || "");
       for (const [k, v] of parsed) {
         if (!cssMap.has(k)) cssMap.set(k, v); // inline wins over external
       }
