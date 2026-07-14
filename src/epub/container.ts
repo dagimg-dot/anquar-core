@@ -1,19 +1,26 @@
+import { parseHTML } from "linkedom";
 import type { EpubZip } from "./zip.ts";
 
 const CONTAINER_PATH = "META-INF/container.xml";
 
-/**
- * Read META-INF/container.xml and extract the OPF package document path.
- * Returns the OPF path (e.g. "OEBPS/content.opf") relative to ZIP root.
- */
 export function getOpfPath(zip: EpubZip): string {
   const xml = zip.readText(CONTAINER_PATH);
   if (!xml) {
     throw new Error("META-INF/container.xml not found — not a valid EPUB");
   }
-  const match = xml.match(/full-path="([^"]+)"/);
-  if (!match) {
+  let doc: ReturnType<typeof parseHTML>["document"];
+  try {
+    doc = parseHTML(xml).document;
+  } catch {
+    throw new Error("Failed to parse container.xml");
+  }
+  const rootfile = doc.querySelector("rootfile");
+  if (!rootfile) {
     throw new Error("Could not find OPF path in container.xml");
   }
-  return match[1];
+  const path = rootfile.getAttribute("full-path");
+  if (!path) {
+    throw new Error("rootfile element missing full-path attribute");
+  }
+  return path;
 }

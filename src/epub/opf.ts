@@ -1,9 +1,4 @@
-/**
- * Parse the OPF (Open Packaging Format) file.
- *
- * The OPF is the EPUB's manifest — it lists every resource file
- * (XHTML, images, CSS, fonts) and defines the spine (reading order).
- */
+import { parseHTML } from "linkedom";
 
 export interface OpfItem {
   id: string;
@@ -12,54 +7,70 @@ export interface OpfItem {
 }
 
 export interface ParsedOpf {
-  /** Directory prefix of the OPF file itself (for resolving relative hrefs). */
   opfDir: string;
-  /** All resources keyed by manifest id. */
   manifest: Map<string, OpfItem>;
-  /** Document order (spine itemrefs referencing manifest ids). */
   spine: { idref: string }[];
+  /** Book title from OPF metadata. */
+  title: string;
+  /** Book author from OPF metadata. */
+  author: string;
 }
 
 /**
- * Parse raw OPF XML into a structured manifest + spine.
- *
- * @param opfXml — raw XML text of the .opf file
- * @param opfPath — path within the EPUB ZIP (e.g. "OEBPS/content.opf")
+ * Parse raw OPF XML into a structured manifest + spine + metadata.
+ * Uses linkedom DOM for robust handling of namespaces and formatting.
  */
 export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
   const manifest = new Map<string, OpfItem>();
   const spine: { idref: string }[] = [];
   const opfDir = opfPath.includes("/") ? opfPath.replace(/\/[^/]+$/, "") + "/" : "";
 
-  // Parse <manifest> <item ... /> entries
-  const itemRe = /<item\s[^>]*\/?>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = itemRe.exec(opfXml)) !== null) {
-    const id = attr(m[0], "id");
-    const href = attr(m[0], "href");
-    const mediaType = attr(m[0], "media-type") || "";
-    if (id && href) {
-      manifest.set(id, { id, href, mediaType });
+  let doc: ReturnType<typeof parseHTML>["document"];
+  try {
+    doc = parseHTML(opfXml).document;
+  } catch {
+    return { opfDir, manifest, spine, title: "Unknown", author: "Unknown" };
+  }
+
+  // ── Metadata ────────────────────────────────────────────────
+  // Namespaced elements like dc:title aren't reliably queriable,
+  // so iterate all elements and match on tag name.
+  let title = "Unknown";
+  let author = "Unknown";
+  for (const el of doc.querySelectorAll("*")) {
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag === "dc:title" || tag.endsWith(":title")) {
+      const t = (el.textContent || "").trim();
+      if (t) title = t;
+    }
+    if (tag === "dc:creator" || tag.endsWith(":creator")) {
+      const a = (el.textContent || "").trim();
+      if (a) author = a;
     }
   }
 
-  // Parse <spine> <itemref ... /> entries
-  const spineBlock = opfXml.match(/<spine[^>]*>([\s\S]*?)<\/spine>/i);
-  if (spineBlock) {
-    const refRe = /<itemref[^>]*idref="([^"]+)"[^>]*\/?>/gi;
-    while ((m = refRe.exec(spineBlock[1])) !== null) {
-      spine.push({ idref: m[1] });
+  // ── Manifest ────────────────────────────────────────────────
+  for (const el of doc.querySelectorAll("*")) {
+    const tag = (el.tagName || "").toLowerCase();
+    // Match "item" in any namespace (default opf or otherwise)
+    if (tag === "item" || tag.endsWith(":item")) {
+      const id = el.getAttribute("id");
+      const href = el.getAttribute("href");
+      const mediaType = el.getAttribute("media-type") || "";
+      if (id && href) {
+        manifest.set(id, { id, href, mediaType });
+      }
     }
   }
 
-  return { opfDir, manifest, spine };
-}
+  // ── Spine ────────────────────────────────────────────────────
+  for (const el of doc.querySelectorAll("*")) {
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag === "itemref" || tag.endsWith(":itemref")) {
+      const idref = el.getAttribute("idref");
+      if (idref) spine.push({ idref });
+    }
+  }
 
-/** Extract an attribute value from an XML tag string. */
-function attr(tag: string, name: string): string | undefined {
-  // Try double-quoted first, then single-quoted
-  const dq = tag.match(new RegExp(`${name}="([^"]*)"`));
-  if (dq) return dq[1];
-  const sq = tag.match(new RegExp(`${name}='([^']*)'`));
-  return sq?.[1];
+  return { opfDir, manifest, spine, title, author };
 }

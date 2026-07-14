@@ -79,8 +79,8 @@ export async function parseEpub(
   }
   const opf = parseOpf(opfXml, opfRel);
 
-  const bookTitle = opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i)?.[1] || "Unknown";
-  const bookAuthor = opfXml.match(/<dc:creator[^>]*>([^<]*)<\/dc:creator>/i)?.[1] || "Unknown";
+  const bookTitle = opf.title;
+  const bookAuthor = opf.author;
 
   // 2. Build XHTML content map (for title extractors)
   const xhtmlFiles = new Map<string, string>();
