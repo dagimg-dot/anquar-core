@@ -115,7 +115,7 @@ export async function parseEpub(
   }
 
   // 3. Extract chapter titles
-  const titleParams: TitleExtractorParams = { zip, opf, opfXml, xhtmlFiles };
+  const titleParams: TitleExtractorParams = { zip, opf, xhtmlFiles };
   const titleMap = await opts.titleExtractor.extract(titleParams);
 
   if (opts.debug) {

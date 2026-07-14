@@ -49,8 +49,7 @@ export class TitleTagExtractor implements TitleExtractor {
   }
 
   private guessBookTitle(params: TitleExtractorParams): string {
-    const dcTitle = params.opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/i);
-    return (dcTitle?.[1] || "").trim().toLowerCase();
+    return (params.opf.title || "").toLowerCase();
   }
 
   private isBoilerplate(text: string, bookTitle: string, href: string): boolean {
