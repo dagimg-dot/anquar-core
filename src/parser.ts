@@ -9,6 +9,7 @@ import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ImageResolverContext } from "./extractors/image/types.ts";
 import type { StyleMapping } from "./extractors/block/types.ts";
 import { decodeEntities } from "./utils/entities.ts";
+import { parseCssStyles } from "./utils/css.ts";
 
 /** Titles that indicate a chapter is front matter (not actual content). */
 const FM_TITLES = new Set([
@@ -45,21 +46,6 @@ export function isFrontMatter(
     chapterTitle === bookTitle ||
     (chapterIndex < 3 && textBlockCount < 3 && wordCount < 30)
   );
-}
-
-/** Minimal CSS class → style parser. */
-function parseCssMap(css: string): Map<string, StyleMapping> {
-  const map = new Map<string, StyleMapping>();
-  const ruleRe = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = ruleRe.exec(css)) !== null) {
-    const cls = m[1];
-    const body = m[2];
-    const bold = /\bfont-weight\s*:\s*bold\b/i.test(body);
-    const italic = /\bfont-style\s*:\s*italic\b/i.test(body);
-    if (bold || italic) map.set(cls, { bold, italic });
-  }
-  return map;
 }
 
 /**
@@ -120,7 +106,7 @@ export async function parseEpub(
       const cssPath = zip.resolvePath(opf.opfDir, item.href);
       const css = zip.readText(cssPath);
       if (css) {
-        const parsed = parseCssMap(css);
+        const parsed = parseCssStyles(css);
         for (const [k, v] of parsed) {
           if (!cssMap.has(k)) cssMap.set(k, v);
         }

@@ -1,6 +1,7 @@
 import { parseHTML } from "linkedom";
 import type { StyleRun } from "../../types.ts";
 import type { RawBlock, BlockExtractor, StyleMapping } from "./types.ts";
+import { parseCssStyles } from "../../utils/css.ts";
 
 /**
  * Minimal node shape used by the DOM walker.
@@ -32,19 +33,9 @@ function normalizeRuns(runs: StyleRun[]): StyleRun[] {
   return out;
 }
 
-/** Parse a CSS string for class → style mappings. */
+/** Parse a CSS string for class → style mappings (delegates to shared parser). */
 function parseCssForStyles(css: string): Map<string, StyleMapping> {
-  const map = new Map<string, StyleMapping>();
-  const ruleRe = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = ruleRe.exec(css)) !== null) {
-    const cls = m[1];
-    const body = m[2];
-    const bold = /\bfont-weight\s*:\s*bold\b/i.test(body);
-    const italic = /\bfont-style\s*:\s*italic\b/i.test(body);
-    if (bold || italic) map.set(cls, { bold, italic });
-  }
-  return map;
+  return parseCssStyles(css);
 }
 
 /**
