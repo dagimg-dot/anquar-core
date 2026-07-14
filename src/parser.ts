@@ -56,11 +56,11 @@ export function isFrontMatter(
  * and block extraction — pass a custom `ParseOptions` to override
  * any strategy.
  *
- * @param filePath — path to the .epub file
+ * @param input — path to the .epub file, or raw bytes of the EPUB
  * @param options — optional strategy overrides (all fields have safe defaults)
  */
 export async function parseEpub(
-  filePath: string,
+  input: string | Uint8Array,
   options?: Partial<ParseOptions>,
 ): Promise<ParsedBook> {
   const opts: ParseOptions = {
@@ -69,7 +69,7 @@ export async function parseEpub(
     blockExtractor: options?.blockExtractor ?? DEFAULT_PARSE_OPTIONS.blockExtractor,
     debug: options?.debug ?? DEFAULT_PARSE_OPTIONS.debug,
   };
-  const zip = new EpubZip(filePath);
+  const zip = new EpubZip(input);
 
   // 1. Locate and parse OPF
   const opfRel = getOpfPath(zip);

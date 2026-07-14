@@ -8,8 +8,9 @@ import AdmZip from "adm-zip";
 export class EpubZip {
   private zip: AdmZip;
 
-  constructor(filePath: string) {
-    this.zip = new AdmZip(filePath);
+  constructor(input: string | Uint8Array) {
+    this.zip =
+      typeof input === "string" ? new AdmZip(input) : new AdmZip(input as unknown as Buffer);
   }
 
   /** Read a file from the ZIP as text. Returns empty string if not found. */
