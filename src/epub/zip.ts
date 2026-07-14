@@ -9,8 +9,14 @@ export class EpubZip {
   private zip: AdmZip;
 
   constructor(input: string | Uint8Array) {
-    this.zip =
-      typeof input === "string" ? new AdmZip(input) : new AdmZip(input as unknown as Buffer);
+    switch (typeof input) {
+      case "string":
+        this.zip = new AdmZip(input);
+        break;
+      default:
+        this.zip = new AdmZip(input as unknown as Buffer);
+        break;
+    }
   }
 
   /** Read a file from the ZIP as text. Returns empty string if not found. */
