@@ -87,13 +87,18 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
   private static SKIP_TAGS = new Set(["script", "style", "noscript", "title", "meta", "link"]);
 
   extract(html: string, externalCss?: Map<string, StyleMapping>): RawBlock[] {
-    const { document } = parseHTML(html);
-    const body = document.querySelector("body");
+    let doc: ReturnType<typeof parseHTML>["document"];
+    try {
+      doc = parseHTML(html).document;
+    } catch {
+      return [];
+    }
+    const body = doc.querySelector("body");
     if (!body) return [];
 
     // Build CSS class map: merge external (from parser) with inline <style>
     const cssMap = new Map(externalCss);
-    for (const st of document.querySelectorAll("style")) {
+    for (const st of doc.querySelectorAll("style")) {
       const parsed = parseCssForStyles(st.textContent || "");
       for (const [k, v] of parsed) {
         if (!cssMap.has(k)) cssMap.set(k, v); // inline wins over external
@@ -176,7 +181,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       if (tag === "img") {
         flush();
         const src = n.getAttribute?.("src") || "";
-        blocks.push({ type: "image", content: src });
+        const alt = n.getAttribute?.("alt") || "";
+        blocks.push({ type: "image", content: src, alt });
         return;
       }
 

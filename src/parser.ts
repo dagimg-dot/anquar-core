@@ -184,7 +184,7 @@ export async function parseEpub(
         type: "image",
         id: `c${chapterIndex}-${i}`,
         src: b.content,
-        alt: "",
+        alt: b.alt,
         data,
         chapterIndex,
         position: i,
@@ -200,7 +200,7 @@ export async function parseEpub(
       blocks,
       frontMatter: isFrontMatter(
         chapterTitle,
-        bookTitle,
+        decodeEntities(bookTitle),
         chapterIndex,
         textBlocks.length,
         wordCount,

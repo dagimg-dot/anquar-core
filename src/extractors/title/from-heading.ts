@@ -18,8 +18,13 @@ export class HeadingTitleExtractor implements TitleExtractor {
     const titles = new Map<string, string>();
 
     for (const [href, html] of params.xhtmlFiles) {
-      const { document } = parseHTML(html);
-      const body = document.querySelector("body");
+      let doc: ReturnType<typeof parseHTML>["document"];
+      try {
+        doc = parseHTML(html).document;
+      } catch {
+        continue;
+      }
+      const body = doc.querySelector("body");
       if (!body) continue;
 
       const heading = body.querySelector("h1") || body.querySelector("h2");

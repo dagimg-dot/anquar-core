@@ -1,5 +1,6 @@
 import { parseHTML } from "linkedom";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
+import { normalizeTitleKey } from "../../utils/path.ts";
 
 /**
  * Extract chapter titles from the EPUB3 nav.xhtml file.
@@ -26,10 +27,15 @@ export class NavTitleExtractor implements TitleExtractor {
     const navHtml = params.zip.readText(navPath);
     if (!navHtml) return titles;
 
-    const { document } = parseHTML(navHtml);
+    let doc: ReturnType<typeof parseHTML>["document"];
+    try {
+      doc = parseHTML(navHtml).document;
+    } catch {
+      return titles;
+    }
 
     // Find <nav epub:type="toc"> — the canonical TOC
-    const allNavs = document.querySelectorAll("nav");
+    const allNavs = doc.querySelectorAll("nav");
     let tocNav: Element | null = null;
     for (const nav of allNavs) {
       const epubType = nav.getAttribute("epub:type") || nav.getAttribute("type");
@@ -52,10 +58,7 @@ export class NavTitleExtractor implements TitleExtractor {
       // Strip fragment and normalize path
       const base = href.split("#")[0];
       const resolved = navDir ? params.zip.resolvePath(navDir, base) : base;
-      // Normalize relative to OPF dir for matching
-      const key = resolved.startsWith(params.opf.opfDir)
-        ? resolved.slice(params.opf.opfDir.length)
-        : resolved;
+      const key = normalizeTitleKey(params.opf.opfDir, resolved);
 
       if (!titles.has(key)) {
         titles.set(key, text);

@@ -27,8 +27,13 @@ export class TitleTagExtractor implements TitleExtractor {
     const bookTitle = this.guessBookTitle(params);
 
     for (const [href, html] of params.xhtmlFiles) {
-      const { document } = parseHTML(html);
-      const titleEl = document.querySelector("title");
+      let doc: ReturnType<typeof parseHTML>["document"];
+      try {
+        doc = parseHTML(html).document;
+      } catch {
+        continue;
+      }
+      const titleEl = doc.querySelector("title");
       if (!titleEl) continue;
 
       const text = (titleEl.textContent || "").trim();

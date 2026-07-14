@@ -13,6 +13,7 @@ export interface RawTextBlock {
 export interface RawImageBlock {
   type: "image";
   content: string; // img src
+  alt: string;
 }
 
 export type RawBlock = RawTextBlock | RawImageBlock;

@@ -1,34 +1,21 @@
 import { parseNcx } from "../../epub/ncx.ts";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
+import { normalizeTitleKey } from "../../utils/path.ts";
 
 /**
  * Find the NCX file path from the OPF manifest.
  * Falls back to common paths if not found in manifest.
  */
 function findNcxPath(params: TitleExtractorParams): string | null {
-  // First, look in the OPF manifest for an item with NCX media-type
   for (const item of params.opf.manifest.values()) {
     if (item.mediaType === "application/x-dtbncx+xml") {
       return params.zip.resolvePath(params.opf.opfDir, item.href);
     }
   }
-  // Fallback: try common locations
   for (const guess of ["toc.ncx", "OEBPS/toc.ncx"]) {
     if (params.zip.has(guess)) return guess;
   }
   return null;
-}
-
-/**
- * Normalise a path so it's relative to the OPF directory.
- * This ensures NCX-sourced keys match manifest hrefs.
- *
- * Example:
- *   opfDir = "OEBPS/" , path = "OEBPS/html/ch1.xhtml"
- *   → "html/ch1.xhtml"
- */
-function stripOpfDir(opfDir: string, path: string): string {
-  return path.startsWith(opfDir) ? path.slice(opfDir.length) : path;
 }
 
 /**
@@ -56,7 +43,7 @@ export class NcxTitleExtractor implements TitleExtractor {
 
     for (const [href, title] of ncxTitles) {
       const resolved = ncxDir ? params.zip.resolvePath(ncxDir, href) : href;
-      const key = stripOpfDir(params.opf.opfDir, resolved);
+      const key = normalizeTitleKey(params.opf.opfDir, resolved);
       if (!titles.has(key)) {
         titles.set(key, title);
       }
