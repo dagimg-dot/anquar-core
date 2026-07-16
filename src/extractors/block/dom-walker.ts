@@ -2,6 +2,7 @@ import { parseHTML } from "linkedom";
 import type { StyleRun } from "../../types.ts";
 import type { RawBlock, BlockExtractor, StyleMapping } from "./types.ts";
 import { parseCssStyles } from "../../utils/css.ts";
+import { normalizeRuns } from "../../utils/runs.ts";
 
 /**
  * Minimal node shape used by the DOM walker.
@@ -14,23 +15,6 @@ interface WalkNode {
   textContent?: string | null;
   childNodes?: WalkNode[];
   getAttribute?(name: string): string | null;
-}
-
-/** Merge adjacent runs with identical style flags. */
-function normalizeRuns(runs: StyleRun[]): StyleRun[] {
-  if (runs.length <= 1) return runs;
-  const out: StyleRun[] = [];
-  let cur = runs[0];
-  for (let i = 1; i < runs.length; i++) {
-    if (cur.bold === runs[i].bold && cur.italic === runs[i].italic) {
-      cur = { ...cur, text: cur.text + runs[i].text };
-    } else {
-      out.push(cur);
-      cur = runs[i];
-    }
-  }
-  out.push(cur);
-  return out;
 }
 
 /**

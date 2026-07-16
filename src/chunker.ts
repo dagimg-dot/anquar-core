@@ -1,5 +1,5 @@
 import type { ParsedBook, Block, TextBlock, StyleRun, ChunkConfig } from "./types.ts";
-
+import { normalizeRuns } from "./utils/runs.ts";
 const HEADER_WRAP_LEN = "── ".length + " ──".length;
 
 // ─── Sentence splitting (works on plain text) ───────────────────
@@ -65,22 +65,6 @@ export function hardSplit(text: string, maxChars: number): string[] {
 }
 
 // ─── Run-aware operations ──────────────────────────────────────
-
-function normalizeRuns(runs: StyleRun[]): StyleRun[] {
-  if (runs.length <= 1) return runs;
-  const out: StyleRun[] = [];
-  let cur = runs[0];
-  for (let i = 1; i < runs.length; i++) {
-    if (cur.bold === runs[i].bold && cur.italic === runs[i].italic) {
-      cur = { ...cur, text: cur.text + runs[i].text };
-    } else {
-      out.push(cur);
-      cur = runs[i];
-    }
-  }
-  out.push(cur);
-  return out;
-}
 
 function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
   const fullText = runs.map((r) => r.text).join("");
