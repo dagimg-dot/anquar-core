@@ -42,6 +42,16 @@ export interface ParsedBook {
   chapters: ParsedChapter[];
 }
 
+/** A parsed article or blog post — flat blocks, no chapters. */
+export interface ParsedArticle {
+  title: string;
+  author: string;
+  siteName: string;
+  url: string;
+  published?: string;
+  blocks: Block[];
+}
+
 export interface ChunkConfig {
   /** Minimum characters per text chunk (merge short sentences up to this) */
   minChars: number;
