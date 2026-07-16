@@ -60,7 +60,7 @@ export class EpubZip {
    */
   resolvePath(base: string, rel: string): string {
     if (rel.startsWith("/")) return rel.slice(1);
-    let p = rel.startsWith("./") ? rel.slice(2) : rel;
+    const p = rel.startsWith("./") ? rel.slice(2) : rel;
     const parts = (base + p).split("/").filter(Boolean);
     const out: string[] = [];
     for (const seg of parts) {
