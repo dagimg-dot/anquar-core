@@ -1,6 +1,6 @@
 import { parseHTML } from "linkedom";
-import type { StyleRun } from "../../types.ts";
-import type { RawBlock, BlockExtractor, StyleMapping } from "./types.ts";
+import type { StyleRun, StyleMapping } from "../../types.ts";
+import type { RawBlock, BlockExtractor } from "./types.ts";
 import { parseCssStyles } from "../../utils/css.ts";
 import { normalizeRuns } from "../../utils/runs.ts";
 
