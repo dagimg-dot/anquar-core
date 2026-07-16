@@ -10,6 +10,7 @@ import type { ImageResolverContext } from "./extractors/image/types.ts";
 import type { StyleMapping } from "./types.ts";
 import { decodeEntities } from "./utils/entities.ts";
 import { parseCssStyles } from "./utils/css.ts";
+import { parseHTML } from "linkedom";
 
 /** Titles that indicate a chapter is front matter (not actual content). */
 const FM_TITLES = new Set([
@@ -108,7 +109,33 @@ export async function parseEpubFromZip(zip: EpubZip, opts?: ParseOptions): Promi
   const bookTitle = opf.title;
   const bookAuthor = opf.author;
 
-  // 2. Build XHTML content map (for title extractors)
+  // 2b. Extract cover image from OPF metadata
+  let coverImage: Uint8Array | null = null;
+  try {
+    const { document: metaDoc } = parseHTML(opfXml);
+    // Find <meta name="cover" content="..."> in OPF metadata
+    for (const el of metaDoc.querySelectorAll("*")) {
+      const tag = (el.tagName || "").toLowerCase();
+      if (
+        (tag === "meta" || tag.endsWith(":meta")) &&
+        el.getAttribute?.("name")?.toLowerCase() === "cover"
+      ) {
+        const coverId = el.getAttribute("content");
+        if (coverId) {
+          const coverItem = opf.manifest.get(coverId);
+          if (coverItem) {
+            const coverPath = zip.resolvePath(opf.opfDir, coverItem.href);
+            coverImage = zip.readBinary(coverPath);
+          }
+        }
+        break;
+      }
+    }
+  } catch {
+    // Cover image is optional — silently skip if not found
+  }
+
+  // 3. Build XHTML content map (for title extractors)
   const xhtmlFiles = new Map<string, string>();
   const spineMap: { href: string; itemId: string }[] = [];
 
@@ -221,5 +248,10 @@ export async function parseEpubFromZip(zip: EpubZip, opts?: ParseOptions): Promi
     chapterIndex++;
   }
 
-  return { title: decodeEntities(bookTitle), author: decodeEntities(bookAuthor), chapters };
+  return {
+    title: decodeEntities(bookTitle),
+    author: decodeEntities(bookAuthor),
+    chapters,
+    coverImage,
+  };
 }

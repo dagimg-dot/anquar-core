@@ -46,6 +46,8 @@ export interface ParsedBook {
   title: string;
   author: string;
   chapters: ParsedChapter[];
+  /** Cover image bytes, if found. */
+  coverImage?: Uint8Array | null;
 }
 
 /** A parsed article or blog post — flat blocks, no chapters. */
