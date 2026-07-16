@@ -11,7 +11,7 @@ export function asFullHtml(html: string): string {
 /**
  * Remove non-content elements from Readability's HTML output:
  * - `<form>` and `<button>` elements (subscription forms)
- * - Short elements (< 100 chars) whose text matches boilerplate patterns
+ * - Short elements (< 200 chars) whose text matches boilerplate patterns
  */
 export function cleanupArticle(html: string): string {
   // Wrap in a full document so linkedom populates body correctly.
