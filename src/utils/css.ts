@@ -1,4 +1,4 @@
-import type { StyleMapping } from "../extractors/block/types.ts";
+import type { StyleMapping } from "../types.ts";
 
 /**
  * Extract bold/italic class mappings from CSS.

@@ -7,7 +7,7 @@ import { getOpfPath } from "./epub/container.ts";
 import { parseOpf } from "./epub/opf.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ImageResolverContext } from "./extractors/image/types.ts";
-import type { StyleMapping } from "./extractors/block/types.ts";
+import type { StyleMapping } from "./types.ts";
 import { decodeEntities } from "./utils/entities.ts";
 import { parseCssStyles } from "./utils/css.ts";
 

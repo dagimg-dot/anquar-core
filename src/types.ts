@@ -5,6 +5,12 @@ export interface StyleRun {
   italic: boolean;
 }
 
+/** Class → style mapping extracted from CSS. */
+export interface StyleMapping {
+  bold: boolean;
+  italic: boolean;
+}
+
 export interface TextBlock {
   type: "text";
   id: string;

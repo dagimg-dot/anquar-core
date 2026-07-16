@@ -1,4 +1,4 @@
-import type { StyleRun } from "../../types.ts";
+import type { StyleRun, StyleMapping } from "../../types.ts";
 
 /**
  * Raw block extracted from XHTML — before chapter assignment
@@ -17,12 +17,6 @@ export interface RawImageBlock {
 }
 
 export type RawBlock = RawTextBlock | RawImageBlock;
-
-/** Class → style mapping extracted from CSS files. */
-export interface StyleMapping {
-  bold: boolean;
-  italic: boolean;
-}
 
 /**
  * A block extractor walks XHTML DOM and returns interleaved
