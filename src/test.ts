@@ -1,16 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Test harness — runs all parser + chunker tests against
- * every EPUB in samples/ plus unit tests.
+ * Test harness — runs parser + chunker tests against
+ * EPUBs in sample_epubs/ and articles in sample_urls/list.json.
  *
- * Usage: bun run test
+ * Usage:
+ *   bun test              → all (epub + article)
+ *   bun test --epub       → EPUBs only
+ *   bun test --article    → articles only
  */
 
-import { readdirSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { parseEpub } from "./parser.ts";
 import { chunkBook, splitSentences, hardSplit } from "./chunker.ts";
+import { parseArticle } from "./everything/article.ts";
 import type { ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 
@@ -35,6 +39,11 @@ function title(name: string) {
 }
 
 async function run() {
+  const args = process.argv.slice(2);
+  const testAll = args.length === 0 || args.includes("--all");
+  const testEpub = testAll || args.includes("--epub");
+  const testArticle = testAll || args.includes("--article");
+
   // ─── Unit: splitSentences ──────────────────────────────────────
   title("splitSentences");
   assert(
@@ -47,8 +56,6 @@ async function run() {
       JSON.stringify(["What?", "Really!", "Yes."]),
     "splits on ? and !",
   );
-  // Abbreviation handling has known edge cases with lookbehind
-  // but the merge logic catches most false splits
   {
     const r = splitSentences("He arrived at 5 p.m. and waited.");
     assert(r.length >= 1, "handles abbreviations without crashing");
@@ -92,72 +99,115 @@ async function run() {
   }
 
   // ─── Integration: sample EPUBs ─────────────────────────────────
-  title("Sample EPUBs");
-  const samplesDir = join(__dirname, "..", "samples");
-  let epubFiles: string[] = [];
-  try {
-    epubFiles = readdirSync(samplesDir)
-      .filter((f) => f.endsWith(".epub"))
-      .map((f) => join(samplesDir, f));
-  } catch {
-    console.error("  ⚠ samples/ directory not found");
-  }
-
-  if (epubFiles.length > 0) {
-    assert(true, `found ${epubFiles.length} sample EPUBs`);
-  } else {
-    assert(false, "no sample EPUBs found — skipping integration tests");
-  }
-
-  for (const file of epubFiles) {
-    const name = file.split("/").pop() || file;
-    console.error(`  ${name}`);
-
-    let book: ParsedBook;
+  if (testEpub) {
+    title("Sample EPUBs");
+    const samplesDir = join(__dirname, "..", "sample_epubs");
+    let epubFiles: string[] = [];
     try {
-      book = await parseEpub(file);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      assert(false, `${name}: parse threw: ${msg}`);
-      continue;
+      epubFiles = readdirSync(samplesDir)
+        .filter((f) => f.endsWith(".epub"))
+        .map((f) => join(samplesDir, f));
+    } catch {
+      console.error("  ⚠ sample_epubs/ directory not found");
     }
 
-    assert(!!book.title, `${name}: has title`);
-    assert(!!book.author, `${name}: has author`);
-    assert(book.chapters.length > 0, `${name}: has chapters`);
+    if (epubFiles.length > 0) {
+      assert(true, `found ${epubFiles.length} sample EPUBs`);
+    } else {
+      assert(false, "no sample EPUBs found");
+    }
 
-    for (const ch of book.chapters) {
-      assert(ch.index >= 0, `${name}: chapter ${ch.index} has valid index`);
-      assert(!!ch.title, `${name}: chapter ${ch.index} has title`);
-      assert(ch.blocks.length > 0, `${name}: chapter ${ch.index} has blocks`);
+    for (const file of epubFiles) {
+      const name = file.split("/").pop() || file;
+      console.error(`  ${name}`);
 
-      for (const b of ch.blocks) {
-        assert(!!b.id, `${name}: ch${ch.index} block ${b.position} has id`);
-        assert(b.chapterIndex === ch.index, `${name}: ch${ch.index} block chapterIndex mismatch`);
-        assert(b.position >= 0, `${name}: ch${ch.index} block has position`);
+      let book: ParsedBook;
+      try {
+        book = await parseEpub(file);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        assert(false, `${name}: parse threw: ${msg}`);
+        continue;
+      }
 
-        if (b.type === "text") {
-          assert(!!b.content, `${name}: ch${ch.index} text block has content`);
-          assert(b.charCount === b.content.length, `${name}: ch${ch.index} text block charCount`);
-        }
-        if (b.type === "image") {
-          assert(!!b.src, `${name}: ch${ch.index} image block has src`);
+      assert(!!book.title, `${name}: has title`);
+      assert(!!book.author, `${name}: has author`);
+      assert(book.chapters.length > 0, `${name}: has chapters`);
+
+      for (const ch of book.chapters) {
+        assert(ch.index >= 0, `${name}: chapter ${ch.index} has valid index`);
+        assert(!!ch.title, `${name}: chapter ${ch.index} has title`);
+        assert(ch.blocks.length > 0, `${name}: chapter ${ch.index} has blocks`);
+
+        for (const b of ch.blocks) {
+          assert(!!b.id, `${name}: ch${ch.index} block ${b.position} has id`);
+          assert(b.chapterIndex === ch.index, `${name}: ch${ch.index} block chapterIndex mismatch`);
+          assert(b.position >= 0, `${name}: ch${ch.index} block has position`);
+
+          if (b.type === "text") {
+            assert(!!b.content, `${name}: ch${ch.index} text block has content`);
+            assert(b.charCount === b.content.length, `${name}: ch${ch.index} text block charCount`);
+          }
+          if (b.type === "image") {
+            assert(!!b.src, `${name}: ch${ch.index} image block has src`);
+          }
         }
       }
+
+      const config = { ...DEFAULT_CHUNK_CONFIG };
+      const blocks = chunkBook(book, config);
+      const textBlocks = blocks.filter(
+        (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
+      );
+
+      for (const b of textBlocks) {
+        assert(
+          b.charCount <= config.maxChars + 50,
+          `${name}: chunk ≤${config.maxChars}+50 (got ${b.charCount})`,
+        );
+        assert(b.charCount > 0, `${name}: chunk non-empty`);
+      }
+    }
+  }
+
+  // ─── Integration: sample URLs ──────────────────────────────────
+  if (testArticle) {
+    title("Sample URLs (articles)");
+    const listPath = join(__dirname, "..", "sample_urls", "list.json");
+    let urls: string[] = [];
+    try {
+      urls = JSON.parse(readFileSync(listPath, "utf-8"));
+    } catch {
+      console.error("  ⚠ sample_urls/list.json not found");
+      assert(false, "sample_urls/list.json not found");
     }
 
-    const config = { ...DEFAULT_CHUNK_CONFIG };
-    const blocks = chunkBook(book, config);
-    const textBlocks = blocks.filter(
-      (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
-    );
+    if (urls.length > 0) {
+      assert(true, `found ${urls.length} sample URLs`);
+    } else {
+      assert(false, "no sample URLs found");
+    }
 
-    for (const b of textBlocks) {
-      assert(
-        b.charCount <= config.maxChars + 50,
-        `${name}: chunk ≤${config.maxChars}+50 (got ${b.charCount})`,
-      );
-      assert(b.charCount > 0, `${name}: chunk non-empty`);
+    for (const url of urls) {
+      console.error(`  ${url}`);
+      try {
+        const article = await parseArticle(url, {
+          chunkConfig: { minChars: 80, maxChars: 300, includeChapterHeaders: false },
+        });
+
+        assert(!!article.title, `${url}: has title`);
+        assert(!!article.url, `${url}: has url`);
+        assert(article.blocks.length > 0, `${url}: has blocks`);
+
+        const textBlocks = article.blocks.filter((b) => b.type === "text");
+        for (const b of textBlocks) {
+          assert(b.charCount <= 350, `${url}: chunk ≤350 (got ${b.charCount})`);
+          assert(b.charCount > 0, `${url}: chunk non-empty`);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        assert(false, `${url}: parseArticle threw: ${msg}`);
+      }
     }
   }
 

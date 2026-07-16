@@ -13,13 +13,15 @@ import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const CLI = join(__dirname, "src", "index.ts");
-const samplesDir = join(__dirname, "samples");
+const samplesDir = join(__dirname, "sample_epubs");
 
 const files = readdirSync(samplesDir)
   .filter((f: string) => f.endsWith(".epub"))
   .sort();
 
-console.log(`${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Blocks".padEnd(7)}`);
+console.log(
+  `${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Blocks".padEnd(7)}`,
+);
 console.log("─".repeat(75));
 
 let totalTime = 0;
@@ -48,7 +50,9 @@ for (const file of files) {
   totalBlocks += blocks;
 
   const status = proc.exitCode === 0 ? " " : "⚠";
-  console.log(`${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(blocks).padEnd(7)}`);
+  console.log(
+    `${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(blocks).padEnd(7)}`,
+  );
 
   if (proc.exitCode !== 0) {
     console.error(`  └─ exit ${proc.exitCode}: ${stderr.slice(0, 200)}`);
