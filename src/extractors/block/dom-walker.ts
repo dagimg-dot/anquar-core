@@ -144,8 +144,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
       if (!n) return;
 
       if (n.nodeType === 3) {
-        const t = (n.textContent || "").trim();
-        if (t) runs.push({ text: t, bold: inheritedBold, italic: inheritedItalic });
+        const t = n.textContent || "";
+        if (t.length > 0) runs.push({ text: t, bold: inheritedBold, italic: inheritedItalic });
         return;
       }
 
