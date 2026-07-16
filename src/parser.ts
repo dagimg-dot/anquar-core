@@ -30,7 +30,7 @@ const FM_TITLES = new Set([
  *   2. Title is identical to the book title (title page repeat)
  *   3. One of first 3 chapters with <3 text blocks and <30 words
  */
-export function isFrontMatter(
+function isFrontMatter(
   chapterTitle: string,
   bookTitle: string,
   chapterIndex: number,

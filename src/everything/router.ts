@@ -24,12 +24,12 @@ export interface DocumentOptions {
  * - `Uint8Array` → EPUB (bytes)
  * - `{ html: string }` → article (raw HTML)
  */
-export function parseDocument(
+function parseDocument(
   input: string | Uint8Array | { html: string },
   options?: DocumentOptions,
 ): Promise<DocumentResult>;
 
-export async function parseDocument(
+async function parseDocument(
   input: string | Uint8Array | { html: string },
   options?: DocumentOptions,
 ): Promise<DocumentResult> {

@@ -27,19 +27,19 @@ export interface ParseOptions {
   debug: boolean;
 }
 
-export const DEFAULT_TITLE_EXTRACTOR = new TitleChain([
+const DEFAULT_TITLE_EXTRACTOR = new TitleChain([
   new NcxTitleExtractor(),
   new NavTitleExtractor(),
   new HeadingTitleExtractor(),
   new TitleTagExtractor(),
 ]);
 
-export const DEFAULT_IMAGE_RESOLVER = new ImageChain([
+const DEFAULT_IMAGE_RESOLVER = new ImageChain([
   new ManifestImageResolver(),
   new RelativeImageResolver(),
 ]);
 
-export const DEFAULT_BLOCK_EXTRACTOR = new DomWalkerBlockExtractor();
+const DEFAULT_BLOCK_EXTRACTOR = new DomWalkerBlockExtractor();
 
 export const DEFAULT_PARSE_OPTIONS: ParseOptions = {
   titleExtractor: DEFAULT_TITLE_EXTRACTOR,
