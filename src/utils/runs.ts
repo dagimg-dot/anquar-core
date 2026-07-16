@@ -2,7 +2,7 @@ import type { StyleRun } from "../types.ts";
 
 /** Merge adjacent runs with identical style. */
 export function normalizeRuns(runs: StyleRun[]): StyleRun[] {
-  if (runs.length <= 1) return runs;
+  if (runs.length <= 1) return runs.map((r) => ({ ...r }));
   const out: StyleRun[] = [];
   let cur = runs[0];
   for (let i = 1; i < runs.length; i++) {
