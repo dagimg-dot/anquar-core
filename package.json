@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Book content chunker — replaces mindless scrolling with meaningful scrolling",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "src/anquar-core.ts",
+  "exports": {
+    ".": "./src/anquar-core.ts"
+  },
   "bin": {
     "anquar": "src/index.ts"
   },

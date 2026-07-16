@@ -69,7 +69,33 @@ export async function parseEpub(
     blockExtractor: options?.blockExtractor ?? DEFAULT_PARSE_OPTIONS.blockExtractor,
     debug: options?.debug ?? DEFAULT_PARSE_OPTIONS.debug,
   };
-  const zip = new EpubZip(input);
+  const zip = EpubZip.fromPath(input);
+  return parseEpubFromZip(zip, opts);
+}
+
+/**
+ * Parse an EPUB from a browser File object using JSZip.
+ * JSZip must be passed in (it's a peer dependency, not bundled).
+ *
+ * @example
+ *   import JSZip from "jszip";
+ *   const book = await parseEpubFromFile(file, JSZip);
+ */
+export async function parseEpubFromFile(
+  file: File,
+  JSZip: any,
+  options?: Partial<ParseOptions>,
+): Promise<ParsedBook> {
+  const zip = await EpubZip.fromJSZip(await JSZip.loadAsync(file));
+  return parseEpubFromZip(zip, options as ParseOptions | undefined);
+}
+
+/**
+ * Parse an EPUB from an already-opened zip wrapper.
+ * Useful when using non-AdmZip backends (e.g., JSZip in the browser).
+ */
+export async function parseEpubFromZip(zip: EpubZip, opts?: ParseOptions): Promise<ParsedBook> {
+  const options: ParseOptions = opts ?? DEFAULT_PARSE_OPTIONS;
 
   // 1. Locate and parse OPF
   const opfRel = getOpfPath(zip);
@@ -116,10 +142,10 @@ export async function parseEpub(
 
   // 3. Extract chapter titles
   const titleParams: TitleExtractorParams = { zip, opf, xhtmlFiles };
-  const titleMap = await opts.titleExtractor.extract(titleParams);
+  const titleMap = await options.titleExtractor.extract(titleParams);
 
-  if (opts.debug) {
-    console.error(`[parser] title strategy: ${opts.titleExtractor.name}`);
+  if (options.debug) {
+    console.error(`[parser] title strategy: ${options.titleExtractor.name}`);
     for (const [href, t] of titleMap) {
       console.error(`[title] ${href} → "${t}"`);
     }
@@ -136,7 +162,7 @@ export async function parseEpub(
     const html = zip.readText(xhtmlPath);
     if (!html) continue;
 
-    const rawBlocks = opts.blockExtractor.extract(html, cssMap);
+    const rawBlocks = options.blockExtractor.extract(html, cssMap);
     if (rawBlocks.length === 0) continue;
 
     const chapterTitle = decodeEntities(titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`);
@@ -160,10 +186,10 @@ export async function parseEpub(
         src: b.content,
         xhtmlPath,
       };
-      const data = opts.imageResolver.resolve(imgCtx);
+      const data = options.imageResolver.resolve(imgCtx);
 
-      if (opts.debug && !data) {
-        console.error(`[image] ${opts.imageResolver.name} failed: ${b.content}`);
+      if (options.debug && !data) {
+        console.error(`[image] ${options.imageResolver.name} failed: ${b.content}`);
       }
 
       return {
