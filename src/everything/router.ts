@@ -41,7 +41,7 @@ export async function parseDocument(
   }
 
   const article = await parseArticle(input as string | { html: string }, {
-    ...options?.article,
+    ...(options?.article ?? {}),
     chunkConfig: bookConfig,
   });
   return { type: "article", data: article };

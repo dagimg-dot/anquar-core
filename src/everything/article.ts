@@ -61,8 +61,7 @@ export async function parseArticle(
     throw new Error("Could not extract article content – page may not be reader-able");
   }
 
-  // Readability returns an HTML fragment. Wrap in a full document so
-  // linkedom's body is populated correctly for the DOM walker.
+  // Readability returns a fragment; wrap so linkedom body populates for the walker.
   const wrappedHtml = `<!DOCTYPE html><html><body>${article.content}</body></html>`;
   const extractor = new DomWalkerBlockExtractor();
   const rawBlocks = extractor.extract(wrappedHtml, new Map());
@@ -90,7 +89,6 @@ export async function parseArticle(
     } as const;
   });
 
-  // Chunk the blocks
   const chunked = chunkBlocks(blocks, 0, config);
 
   return {
