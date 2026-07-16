@@ -215,6 +215,8 @@ export function chunkBlocks(blocks: Block[], chapterIndex: number, config: Chunk
       const trimmed = norm
         .map((r) => r.text)
         .join("")
+        .replace(/\s+/g, " ")
+        .replace(/ (?=['’]\w+)/g, "") // collapse "I 've" → "I've"
         .trim();
       if (!trimmed) return;
       pending.push({
