@@ -5,6 +5,7 @@ import { DEFAULT_CHUNK_CONFIG } from "../types.ts";
 import { chunkBlocks } from "../chunker.ts";
 import { DomWalkerBlockExtractor } from "../extractors/block/dom-walker.ts";
 import { decodeEntities } from "../utils/entities.ts";
+import { cleanupArticle, asFullHtml } from "./cleanup.ts";
 
 /**
  * Options for article parsing.
@@ -61,10 +62,10 @@ export async function parseArticle(
     throw new Error("Could not extract article content – page may not be reader-able");
   }
 
-  // Readability returns a fragment; wrap so linkedom body populates for the walker.
-  const wrappedHtml = `<!DOCTYPE html><html><body>${article.content}</body></html>`;
+  // Strip subscription forms and boilerplate, then wrap for the DOM walker.
+  const cleaned = cleanupArticle(article.content);
   const extractor = new DomWalkerBlockExtractor();
-  const rawBlocks = extractor.extract(wrappedHtml, new Map());
+  const rawBlocks = extractor.extract(asFullHtml(cleaned), new Map());
 
   const blocks: Block[] = rawBlocks.map((b, i) => {
     if (b.type === "text") {
