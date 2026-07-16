@@ -71,6 +71,6 @@ export interface ChunkConfig {
 
 export const DEFAULT_CHUNK_CONFIG: ChunkConfig = {
   minChars: 80,
-  maxChars: 300,
+  maxChars: 600,
   includeChapterHeaders: true,
 };

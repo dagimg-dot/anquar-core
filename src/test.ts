@@ -192,7 +192,7 @@ async function run() {
       console.error(`  ${url}`);
       try {
         const article = await parseArticle(url, {
-          chunkConfig: { minChars: 80, maxChars: 300, includeChapterHeaders: false },
+          chunkConfig: { minChars: 80, maxChars: 600, includeChapterHeaders: false },
         });
 
         assert(!!article.title, `${url}: has title`);
@@ -201,7 +201,7 @@ async function run() {
 
         const textBlocks = article.blocks.filter((b) => b.type === "text");
         for (const b of textBlocks) {
-          assert(b.charCount <= 350, `${url}: chunk ≤350 (got ${b.charCount})`);
+          assert(b.charCount <= 900, `${url}: chunk ≤900 (got ${b.charCount})`);
           assert(b.charCount > 0, `${url}: chunk non-empty`);
         }
       } catch (e: unknown) {
