@@ -40,6 +40,19 @@ interface InlineScan {
 const NODE_ELEMENT = 1;
 const NODE_TEXT = 3;
 
+/**
+ * Books converted from PDF map symbol fonts into the Unicode private use area,
+ * where every normal font draws them as a tofu box.
+ */
+const PRIVATE_USE = /\p{Co}/gu;
+
+/** Soft hyphens and zero-width marks: invisible, but they inflate every count. */
+const INVISIBLE = /[\u00AD\u200B-\u200D\uFEFF]/g;
+
+function readable(raw: string | null | undefined): string {
+	return (raw ?? "").replace(PRIVATE_USE, "").replace(INVISIBLE, "");
+}
+
 const BOLD_TAGS = new Set(["b", "strong"]);
 const ITALIC_TAGS = new Set(["i", "em"]);
 const LIST_TAGS = new Set(["ul", "ol"]);
@@ -172,7 +185,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 			const visit = (n: WalkNode, style: Style) => {
 				if (n.nodeType === NODE_TEXT) {
-					const text = n.textContent || "";
+					const text = readable(n.textContent);
 					if (text) collected.push({ text, ...style });
 					return;
 				}
@@ -230,7 +243,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (!n) return;
 
 			if (n.nodeType === NODE_TEXT) {
-				const raw = n.textContent || "";
+				const raw = readable(n.textContent);
 				if (!raw.length) return;
 				// Inter-element whitespace (indentation, newlines) → single space
 				const t = /^\s+$/.test(raw) ? " " : raw;
