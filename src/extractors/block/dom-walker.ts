@@ -1,7 +1,12 @@
 import { parseHTML } from "linkedom";
-import type { StyleMapping, StyleRun } from "../../types.ts";
+import type {
+	HeadingLevel,
+	ListItem,
+	StyleMapping,
+	StyleRun,
+} from "../../types.ts";
 import { parseCssStyles } from "../../utils/css.ts";
-import { normalizeRuns } from "../../utils/runs.ts";
+import { collapseRuns, normalizeRuns, runsText } from "../../utils/runs.ts";
 import type { BlockExtractor, RawBlock } from "./types.ts";
 
 /**
@@ -17,12 +22,64 @@ interface WalkNode {
 	getAttribute?(name: string): string | null;
 }
 
+interface Style {
+	bold: boolean;
+	italic: boolean;
+}
+
+/** A list found while gathering inline content, with the style in force there. */
+interface DeferredList extends Style {
+	node: WalkNode;
+}
+
+interface InlineScan {
+	runs: StyleRun[];
+	lists: DeferredList[];
+}
+
+const NODE_ELEMENT = 1;
+const NODE_TEXT = 3;
+
+const BOLD_TAGS = new Set(["b", "strong"]);
+const ITALIC_TAGS = new Set(["i", "em"]);
+const LIST_TAGS = new Set(["ul", "ol"]);
+
+const HEADING_LEVELS = new Map<string, HeadingLevel>([
+	["h1", 1],
+	["h2", 2],
+	["h3", 3],
+	["h4", 4],
+	["h5", 5],
+	["h6", 6],
+]);
+
+const BLOCK_TAGS = new Set([
+	"p",
+	"div",
+	"blockquote",
+	"li",
+	"section",
+	"figure",
+	"td",
+	"th",
+	"pre",
+]);
+
+const SKIP_TAGS = new Set([
+	"script",
+	"style",
+	"noscript",
+	"title",
+	"meta",
+	"link",
+]);
+
 /**
  * DOM-walking block extractor with bold/italic tracking.
  *
- * Walks the parsed XHTML body tree and extracts interleaved
- * text + image segments. Text is emitted as StyleRun[] with
- * computed bold/italic flags from:
+ * Walks the parsed XHTML body tree and emits paragraphs, headings,
+ * lists and images in document order. Text is emitted as StyleRun[]
+ * with computed bold/italic flags from:
  *   1. Semantic HTML tags (<strong>, <b>, <em>, <i>)
  *   2. Inline style attributes (font-weight, font-style)
  *   3. CSS class names resolved against a pre-parsed map
@@ -32,36 +89,6 @@ interface WalkNode {
  */
 export class DomWalkerBlockExtractor implements BlockExtractor {
 	readonly name = "dom-walker";
-
-	private static BOLD_TAGS = new Set(["b", "strong"]);
-	private static ITALIC_TAGS = new Set(["i", "em"]);
-
-	private static BLOCK_TAGS = new Set([
-		"p",
-		"div",
-		"h1",
-		"h2",
-		"h3",
-		"h4",
-		"h5",
-		"h6",
-		"blockquote",
-		"li",
-		"section",
-		"figure",
-		"td",
-		"th",
-		"pre",
-	]);
-
-	private static SKIP_TAGS = new Set([
-		"script",
-		"style",
-		"noscript",
-		"title",
-		"meta",
-		"link",
-	]);
 
 	extract(html: string, externalCss?: Map<string, StyleMapping>): RawBlock[] {
 		let doc: ReturnType<typeof parseHTML>["document"];
@@ -85,10 +112,12 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		const blocks: RawBlock[] = [];
 		const runs: StyleRun[] = [];
 
+		const tagOf = (n: WalkNode): string => (n.tagName || "").toLowerCase();
+
 		const flush = () => {
 			if (runs.length === 0) return;
 			const norm = normalizeRuns(runs);
-			const content = norm.map((r) => r.text).join("");
+			const content = runsText(norm);
 			if (content.trim()) {
 				blocks.push({ type: "text", content, runs: norm });
 			}
@@ -98,28 +127,21 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		const isSingleImageWrapper = (n: WalkNode): boolean => {
 			const kids = n.childNodes ?? [];
 			const nonText = kids.filter(
-				(k) =>
-					k.nodeType === 1 &&
-					!DomWalkerBlockExtractor.SKIP_TAGS.has(
-						(k.tagName || "").toLowerCase(),
-					),
+				(k) => k.nodeType === NODE_ELEMENT && !SKIP_TAGS.has(tagOf(k)),
 			);
 			return (
-				nonText.length === 1 && nonText[0]?.tagName?.toLowerCase() === "img"
+				nonText.length === 1 &&
+				nonText[0] !== undefined &&
+				tagOf(nonText[0]) === "img"
 			);
 		};
 
-		const computeStyle = (
-			n: WalkNode,
-			inheritedBold: boolean,
-			inheritedItalic: boolean,
-		) => {
-			let bold = inheritedBold;
-			let italic = inheritedItalic;
-			const tag = (n.tagName || "").toLowerCase();
+		const computeStyle = (n: WalkNode, inherited: Style): Style => {
+			let { bold, italic } = inherited;
+			const tag = tagOf(n);
 
-			if (DomWalkerBlockExtractor.BOLD_TAGS.has(tag)) bold = true;
-			if (DomWalkerBlockExtractor.ITALIC_TAGS.has(tag)) italic = true;
+			if (BOLD_TAGS.has(tag)) bold = true;
+			if (ITALIC_TAGS.has(tag)) italic = true;
 
 			const styleAttr = n.getAttribute?.("style") || "";
 			if (/\bfont-weight\s*:\s*bold\b/i.test(styleAttr)) bold = true;
@@ -139,26 +161,87 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			return { bold, italic };
 		};
 
-		const walk = (
-			n: WalkNode | null,
-			inheritedBold: boolean,
-			inheritedItalic: boolean,
-		) => {
+		/**
+		 * Gather the inline content of a subtree without touching the block
+		 * stream. Nested lists are set aside rather than flattened into the
+		 * text, so the caller can emit them as their own items.
+		 */
+		const scanInline = (parent: WalkNode, inherited: Style): InlineScan => {
+			const collected: StyleRun[] = [];
+			const lists: DeferredList[] = [];
+
+			const visit = (n: WalkNode, style: Style) => {
+				if (n.nodeType === NODE_TEXT) {
+					const text = n.textContent || "";
+					if (text) collected.push({ text, ...style });
+					return;
+				}
+				if (n.nodeType !== NODE_ELEMENT) return;
+
+				const tag = tagOf(n);
+				if (SKIP_TAGS.has(tag) || tag === "img") return;
+				if (LIST_TAGS.has(tag)) {
+					lists.push({ node: n, ...computeStyle(n, style) });
+					return;
+				}
+				if (tag === "br") {
+					collected.push({ text: " ", ...style });
+					return;
+				}
+
+				const own = computeStyle(n, style);
+				for (const c of n.childNodes ?? []) visit(c, own);
+			};
+
+			for (const c of parent.childNodes ?? []) visit(c, inherited);
+			return { runs: collapseRuns(collected), lists };
+		};
+
+		const gatherItems = (
+			list: WalkNode,
+			inherited: Style,
+			depth: number,
+			out: ListItem[],
+		): void => {
+			for (const child of list.childNodes ?? []) {
+				if (child.nodeType !== NODE_ELEMENT) continue;
+
+				const tag = tagOf(child);
+				const style = computeStyle(child, inherited);
+
+				// A list nested directly under <ul>/<ol>, with no <li> of its own.
+				if (LIST_TAGS.has(tag)) {
+					gatherItems(child, style, depth + 1, out);
+					continue;
+				}
+				if (tag !== "li") continue;
+
+				const { runs: itemRuns, lists } = scanInline(child, style);
+				const content = runsText(itemRuns);
+				if (content) out.push({ content, runs: itemRuns, depth });
+
+				for (const nested of lists) {
+					gatherItems(nested.node, nested, depth + 1, out);
+				}
+			}
+		};
+
+		const walk = (n: WalkNode | null, inherited: Style) => {
 			if (!n) return;
 
-			if (n.nodeType === 3) {
+			if (n.nodeType === NODE_TEXT) {
 				const raw = n.textContent || "";
 				if (!raw.length) return;
 				// Inter-element whitespace (indentation, newlines) → single space
 				const t = /^\s+$/.test(raw) ? " " : raw;
-				runs.push({ text: t, bold: inheritedBold, italic: inheritedItalic });
+				runs.push({ text: t, ...inherited });
 				return;
 			}
 
-			if (n.nodeType !== 1) return;
+			if (n.nodeType !== NODE_ELEMENT) return;
 
-			const tag = (n.tagName || "").toLowerCase();
-			if (DomWalkerBlockExtractor.SKIP_TAGS.has(tag)) return;
+			const tag = tagOf(n);
+			if (SKIP_TAGS.has(tag)) return;
 
 			if (tag === "br") {
 				if (runs.length > 0)
@@ -173,27 +256,48 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 			if (tag === "img") {
 				flush();
-				const src = n.getAttribute?.("src") || "";
-				const alt = n.getAttribute?.("alt") || "";
-				blocks.push({ type: "image", content: src, alt });
+				blocks.push({
+					type: "image",
+					src: n.getAttribute?.("src") || "",
+					alt: n.getAttribute?.("alt") || "",
+				});
 				return;
 			}
 
-			const isBlock = DomWalkerBlockExtractor.BLOCK_TAGS.has(tag);
-			const { bold, italic } = computeStyle(n, inheritedBold, inheritedItalic);
+			const style = computeStyle(n, inherited);
 
+			const level = HEADING_LEVELS.get(tag);
+			if (level !== undefined) {
+				flush();
+				const { runs: headingRuns } = scanInline(n, style);
+				const content = runsText(headingRuns);
+				if (content)
+					blocks.push({ type: "heading", level, content, runs: headingRuns });
+				return;
+			}
+
+			if (LIST_TAGS.has(tag)) {
+				flush();
+				const items: ListItem[] = [];
+				gatherItems(n, style, 0, items);
+				if (items.length > 0)
+					blocks.push({ type: "list", ordered: tag === "ol", items });
+				return;
+			}
+
+			const isBlock = BLOCK_TAGS.has(tag);
 			if (isBlock && runs.length > 0 && !isSingleImageWrapper(n)) {
 				flush();
 			}
 
 			for (const c of n.childNodes ?? []) {
-				walk(c, bold, italic);
+				walk(c, style);
 			}
 
 			if (isBlock) flush();
 		};
 
-		walk(body as unknown as WalkNode, false, false);
+		walk(body as unknown as WalkNode, { bold: false, italic: false });
 		flush();
 
 		return blocks;

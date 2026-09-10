@@ -11,28 +11,61 @@ export interface StyleMapping {
 	italic: boolean;
 }
 
-export interface TextBlock {
-	type: "text";
+/** Fields carried by every block, whatever its type. */
+interface BlockBase {
 	id: string;
+	chapterIndex: number;
+	/** Ordinal within the chapter. Synthetic blocks use -1. */
+	position: number;
+	/** Characters of reader-visible text — the chunker's budget unit. */
+	charCount: number;
+}
+
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface TextBlock extends BlockBase {
+	type: "text";
 	content: string;
 	/** Per-character formatting via run-length encoding. */
 	runs: StyleRun[];
-	charCount: number;
-	chapterIndex: number;
-	position: number; // ordinal within chapter
 }
 
-export interface ImageBlock {
+export interface HeadingBlock extends BlockBase {
+	type: "heading";
+	level: HeadingLevel;
+	content: string;
+	runs: StyleRun[];
+}
+
+export interface ListItem {
+	content: string;
+	runs: StyleRun[];
+	/** Nesting level; 0 is the outermost list. */
+	depth: number;
+}
+
+export interface ListBlock extends BlockBase {
+	type: "list";
+	ordered: boolean;
+	items: ListItem[];
+}
+
+export interface ImageBlock extends BlockBase {
 	type: "image";
-	id: string;
 	src: string;
 	alt: string;
-	data: Uint8Array | null; // raw bytes for CLI display / CDN upload
-	chapterIndex: number;
-	position: number;
+	/** Raw bytes for CLI display / CDN upload. */
+	data: Uint8Array | null;
 }
 
-export type Block = TextBlock | ImageBlock;
+export type Block = TextBlock | HeadingBlock | ListBlock | ImageBlock;
+
+/** Blocks holding a single styled string, as opposed to items or bytes. */
+export type ProseBlock = TextBlock | HeadingBlock;
+
+export function isProseBlock(block: Block): block is ProseBlock {
+	return block.type === "text" || block.type === "heading";
+}
 
 export interface ParsedChapter {
 	index: number;

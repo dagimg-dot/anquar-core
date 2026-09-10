@@ -1,8 +1,13 @@
-import type { StyleMapping, StyleRun } from "../../types.ts";
+import type {
+	HeadingLevel,
+	ListItem,
+	StyleMapping,
+	StyleRun,
+} from "../../types.ts";
 
 /**
- * Raw block extracted from XHTML — before chapter assignment
- * and image binary resolution.
+ * Raw blocks extracted from XHTML — before chapter assignment,
+ * id generation and image binary resolution.
  */
 export interface RawTextBlock {
 	type: "text";
@@ -10,21 +15,32 @@ export interface RawTextBlock {
 	runs: StyleRun[];
 }
 
+export interface RawHeadingBlock {
+	type: "heading";
+	level: HeadingLevel;
+	content: string;
+	runs: StyleRun[];
+}
+
+export interface RawListBlock {
+	type: "list";
+	ordered: boolean;
+	items: ListItem[];
+}
+
 export interface RawImageBlock {
 	type: "image";
-	content: string; // img src
+	src: string;
 	alt: string;
 }
 
-export type RawBlock = RawTextBlock | RawImageBlock;
+export type RawBlock =
+	| RawTextBlock
+	| RawHeadingBlock
+	| RawListBlock
+	| RawImageBlock;
 
-/**
- * A block extractor walks XHTML DOM and returns interleaved
- * text + image segments.
- *
- * Multiple implementations can exist (e.g. DOM-walker, regex-based,
- * streaming parser) as long as they implement this interface.
- */
+/** Walks an XHTML DOM and returns its blocks in document order. */
 export interface BlockExtractor {
 	readonly name: string;
 	extract(html: string, cssMap?: Map<string, StyleMapping>): RawBlock[];

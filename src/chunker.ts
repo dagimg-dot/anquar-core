@@ -1,15 +1,14 @@
+import { listCharCount } from "./blocks.ts";
 import type {
 	Block,
 	ChunkConfig,
+	ListBlock,
+	ListItem,
 	ParsedBook,
 	StyleRun,
 	TextBlock,
 } from "./types.ts";
-import { normalizeRuns } from "./utils/runs.ts";
-
-const HEADER_WRAP_LEN = "── ".length + " ──".length;
-
-// ─── Sentence splitting (works on plain text) ───────────────────
+import { normalizeRuns, runsText } from "./utils/runs.ts";
 
 export function splitSentences(text: string): string[] {
 	const ABBREVIATIONS =
@@ -46,8 +45,6 @@ export function splitSentences(text: string): string[] {
 	return merged;
 }
 
-// ─── Hard split (works on plain text) ───────────────────────────
-
 export function hardSplit(text: string, maxChars: number): string[] {
 	if (text.length <= maxChars) return [text];
 
@@ -71,10 +68,8 @@ export function hardSplit(text: string, maxChars: number): string[] {
 	return chunks;
 }
 
-// ─── Run-aware operations ──────────────────────────────────────
-
 function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
-	const fullText = runs.map((r) => r.text).join("");
+	const fullText = runsText(runs);
 	const sentences = splitSentences(fullText);
 	if (sentences.length <= 1) return [runs];
 
@@ -113,7 +108,7 @@ function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
 }
 
 function hardSplitRuns(runs: StyleRun[], maxChars: number): StyleRun[][] {
-	const fullText = runs.map((r) => r.text).join("");
+	const fullText = runsText(runs);
 	if (fullText.length <= maxChars) return [runs];
 
 	const textChunks = hardSplit(fullText, maxChars);
@@ -173,11 +168,157 @@ function appendRuns(buffer: StyleRun[], incoming: StyleRun[]): void {
 	buffer.push(...rest);
 }
 
-// ─── Core chunker: Block[] → Block[] (no chapters) ─────────────
+/**
+ * Split one paragraph into chunks bounded by config.minChars/maxChars,
+ * appending them to `pending`. A tail shorter than minChars is merged back
+ * into the preceding chunk instead of becoming a card of its own — which is
+ * why chunks land in `pending` rather than the result directly.
+ */
+function chunkTextBlock(
+	block: TextBlock,
+	chapterIndex: number,
+	config: ChunkConfig,
+	pending: TextBlock[],
+): void {
+	const sentenceGroups = splitRunsBySentence(block.runs);
+
+	let bufferRuns: StyleRun[] = [];
+	let bufferText = "";
+	let chunkCount = 0;
+
+	const flushBuffer = () => {
+		const norm = normalizeRuns(bufferRuns);
+		const trimmed = runsText(norm)
+			.replace(/\s+/g, " ")
+			.replace(/ (?=['’]\w+)/g, "") // collapse "I 've" → "I've"
+			.trim();
+		if (!trimmed) return;
+		pending.push({
+			type: "text",
+			id: `c${chapterIndex}-${block.position}-${chunkCount++}`,
+			content: trimmed,
+			runs: norm,
+			charCount: trimmed.length,
+			chapterIndex,
+			position: block.position,
+		});
+		bufferRuns = [];
+		bufferText = "";
+	};
+
+	for (const group of sentenceGroups) {
+		const groupText = runsText(group);
+
+		if (groupText.length > config.maxChars) {
+			for (const part of hardSplitRuns(group, config.maxChars)) {
+				const partText = runsText(part);
+				if (
+					bufferText.length + partText.length + (bufferText ? 1 : 0) >
+						config.maxChars &&
+					bufferRuns.length > 0
+				) {
+					flushBuffer();
+				}
+				appendRuns(bufferRuns, part);
+				bufferText += (bufferText ? " " : "") + partText;
+			}
+			continue;
+		}
+
+		const wouldExceed =
+			bufferText.length + groupText.length + (bufferText ? 1 : 0) >
+			config.maxChars;
+
+		if (wouldExceed && bufferRuns.length > 0) {
+			flushBuffer();
+		}
+
+		appendRuns(bufferRuns, group);
+		bufferText += (bufferText ? " " : "") + groupText;
+	}
+
+	if (bufferText.length >= config.minChars) {
+		flushBuffer();
+		return;
+	}
+
+	if (pending.length > 0 && bufferRuns.length > 0) {
+		const last = pending[pending.length - 1];
+		const merged = `${last.content} ${bufferText}`;
+		if (merged.length <= config.maxChars) {
+			last.content = merged;
+			last.charCount = merged.length;
+			const lastRun = last.runs[last.runs.length - 1];
+			const firstBuf = bufferRuns[0];
+			if (
+				lastRun.bold === firstBuf.bold &&
+				lastRun.italic === firstBuf.italic
+			) {
+				lastRun.text += ` ${firstBuf.text}`;
+				last.runs.push(...bufferRuns.slice(1));
+			} else {
+				last.runs.push(
+					{ text: " ", bold: false, italic: false },
+					...bufferRuns,
+				);
+			}
+			return;
+		}
+		flushBuffer();
+		return;
+	}
+
+	if (bufferRuns.length > 0) flushBuffer();
+}
+
+/** Break items longer than maxChars into several same-depth items. */
+function* boundedItems(
+	items: ListItem[],
+	maxChars: number,
+): Generator<ListItem> {
+	for (const item of items) {
+		if (item.content.length <= maxChars) {
+			yield item;
+			continue;
+		}
+		for (const runs of hardSplitRuns(item.runs, maxChars)) {
+			yield { content: runsText(runs), runs, depth: item.depth };
+		}
+	}
+}
 
 /**
- * Chunk a flat list of blocks into smaller blocks respecting min/max
- * character bounds.  Preserves bold/italic through splits and merges.
+ * Pack a list into cards of at most maxChars. Item boundaries are never
+ * crossed, so a card always holds whole bullets.
+ */
+function splitList(block: ListBlock, config: ChunkConfig): ListBlock[] {
+	const pages: ListItem[][] = [];
+	let current: ListItem[] = [];
+	let size = 0;
+
+	for (const item of boundedItems(block.items, config.maxChars)) {
+		if (current.length > 0 && size + item.content.length > config.maxChars) {
+			pages.push(current);
+			current = [];
+			size = 0;
+		}
+		current.push(item);
+		size += item.content.length;
+	}
+	if (current.length > 0) pages.push(current);
+
+	return pages.map((items, i) => ({
+		...block,
+		id: `${block.id}-${i}`,
+		items,
+		charCount: listCharCount(items),
+	}));
+}
+
+/**
+ * Chunk a flat list of blocks into card-sized blocks respecting min/max
+ * character bounds. Preserves bold/italic through splits and merges.
+ * Headings and images pass through untouched — each is already one card.
  *
  * @param blocks — the blocks to chunk (typically from one chapter or article)
  * @param chapterIndex — used for id generation
@@ -191,127 +332,55 @@ export function chunkBlocks(
 	const result: Block[] = [];
 	let pending: TextBlock[] = [];
 
+	const flushPending = () => {
+		result.push(...pending);
+		pending = [];
+	};
+
 	for (const block of blocks) {
-		if (block.type === "image") {
-			result.push(...pending);
-			pending = [];
-			result.push(block);
-			continue;
-		}
-
-		const sentenceGroups = splitRunsBySentence(block.runs);
-
-		let bufferRuns: StyleRun[] = [];
-		let bufferText = "";
-		let blockCount = 0;
-
-		const flushBuffer = () => {
-			const norm = normalizeRuns(bufferRuns);
-			const trimmed = norm
-				.map((r) => r.text)
-				.join("")
-				.replace(/\s+/g, " ")
-				.replace(/ (?=['’]\w+)/g, "") // collapse "I 've" → "I've"
-				.trim();
-			if (!trimmed) return;
-			pending.push({
-				type: "text",
-				id: `c${chapterIndex}-${block.position}-${blockCount++}`,
-				content: trimmed,
-				runs: norm,
-				charCount: trimmed.length,
-				chapterIndex,
-				position: block.position,
-			});
-			bufferRuns = [];
-			bufferText = "";
-		};
-
-		for (const group of sentenceGroups) {
-			const groupText = group.map((r) => r.text).join("");
-
-			if (groupText.length > config.maxChars) {
-				const parts = hardSplitRuns(group, config.maxChars);
-				for (const part of parts) {
-					const partText = part.map((r) => r.text).join("");
-					if (
-						bufferText.length + partText.length + (bufferText ? 1 : 0) >
-							config.maxChars &&
-						bufferRuns.length > 0
-					) {
-						flushBuffer();
-					}
-					appendRuns(bufferRuns, part);
-					bufferText += (bufferText ? " " : "") + partText;
-				}
-				continue;
-			}
-
-			const wouldExceed =
-				bufferText.length + groupText.length + (bufferText ? 1 : 0) >
-				config.maxChars;
-
-			if (wouldExceed && bufferRuns.length > 0) {
-				flushBuffer();
-			}
-
-			appendRuns(bufferRuns, group);
-			bufferText += (bufferText ? " " : "") + groupText;
-		}
-
-		if (bufferText.length >= config.minChars) {
-			flushBuffer();
-		} else if (pending.length > 0 && bufferRuns.length > 0) {
-			const last = pending[pending.length - 1];
-			const merged = `${last.content} ${bufferText}`;
-			if (merged.length <= config.maxChars) {
-				last.content = merged;
-				last.charCount = merged.length;
-				const lastRun = last.runs[last.runs.length - 1];
-				const firstBuf = bufferRuns[0];
-				if (
-					lastRun.bold === firstBuf.bold &&
-					lastRun.italic === firstBuf.italic
-				) {
-					lastRun.text += ` ${firstBuf.text}`;
-					last.runs.push(...bufferRuns.slice(1));
-				} else {
-					last.runs.push(
-						{ text: " ", bold: false, italic: false },
-						...bufferRuns,
-					);
-				}
-			} else {
-				flushBuffer();
-			}
-		} else if (bufferRuns.length > 0) {
-			flushBuffer();
+		switch (block.type) {
+			case "text":
+				chunkTextBlock(block, chapterIndex, config, pending);
+				break;
+			case "list":
+				flushPending();
+				result.push(...splitList(block, config));
+				break;
+			case "heading":
+			case "image":
+				flushPending();
+				result.push(block);
+				break;
 		}
 	}
 
-	result.push(...pending);
+	flushPending();
 	return result;
 }
 
-// ─── Book wrapper: iterates chapters ─────────────────────────────
-
 /**
  * Chunk an entire parsed book chapter by chapter.
- * Adds chapter header blocks when includeChapterHeaders is enabled.
+ * Adds chapter header blocks when includeChapterHeaders is enabled, unless
+ * the chapter already opens with a heading carrying that same title.
  */
 export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
 	const result: Block[] = [];
 
 	for (const chapter of book.chapters) {
-		if (config.includeChapterHeaders) {
+		const [first] = chapter.blocks;
+		const selfTitled =
+			first?.type === "heading" && first.content === chapter.title;
+
+		if (config.includeChapterHeaders && !selfTitled) {
 			result.push({
-				type: "text",
+				type: "heading",
 				id: `ch-${chapter.index}`,
-				content: `── ${chapter.title} ──`,
-				runs: [{ text: `── ${chapter.title} ──`, bold: false, italic: false }],
-				charCount: chapter.title.length + HEADER_WRAP_LEN,
+				level: 1,
+				content: chapter.title,
+				runs: [{ text: chapter.title, bold: false, italic: false }],
+				charCount: chapter.title.length,
 				chapterIndex: chapter.index,
-				position: -1,
+				position: -1, // sorts ahead of every extracted block
 			});
 		}
 

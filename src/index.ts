@@ -27,17 +27,42 @@ OPTIONS
 `);
 }
 
+function truncate(text: string): string {
+	return text.length > BLOCK_PREVIEW_MAX
+		? `${text.slice(0, BLOCK_PREVIEW_MAX - 3)}...`
+		: text;
+}
+
 function formatBlock(b: Block, idx: number, total: number): void {
 	const p = `[${idx + 1}/${total}]`;
-	if (b.type === "image") {
-		const size = b.data ? ` ${b.data.byteLength} bytes` : " no data";
-		console.log(`${p} ██ IMAGE ██ ${b.src}${size}`);
-	} else {
-		const txt =
-			b.content.length > BLOCK_PREVIEW_MAX
-				? `${b.content.slice(0, BLOCK_PREVIEW_MAX - 3)}...`
-				: b.content;
-		console.log(`${p} ${txt}  (${b.charCount}c)`);
+
+	switch (b.type) {
+		case "image": {
+			const size = b.data ? ` ${b.data.byteLength} bytes` : " no data";
+			console.log(`${p} ██ IMAGE ██ ${b.src}${size}`);
+			return;
+		}
+		case "heading":
+			console.log(
+				`${p} ${"#".repeat(b.level)} ${truncate(b.content)}  (${b.charCount}c)`,
+			);
+			return;
+		case "list": {
+			const kind = b.ordered ? "ordered" : "bulleted";
+			console.log(
+				`${p} ${kind} list, ${b.items.length} items  (${b.charCount}c)`,
+			);
+			b.items.forEach((item, i) => {
+				const bullet = b.ordered ? `${i + 1}.` : "•";
+				console.log(
+					`      ${"  ".repeat(item.depth)}${bullet} ${truncate(item.content)}`,
+				);
+			});
+			return;
+		}
+		case "text":
+			console.log(`${p} ${truncate(b.content)}  (${b.charCount}c)`);
+			return;
 	}
 }
 
@@ -89,16 +114,19 @@ async function cmdParse(
 }
 
 function printStats(blocks: Block[], chapterCount: number): void {
-	const txt = blocks.filter(
-		(b): b is Extract<Block, { type: "text" }> => b.type === "text",
-	);
+	const txt = blocks.filter((b) => b.type === "text");
+	const headings = blocks.filter((b) => b.type === "heading");
+	const lists = blocks.filter((b) => b.type === "list");
 	const img = blocks.filter((b) => b.type === "image");
 	const failed = img.filter((b) => !b.data).length;
 	const lens = txt.map((b) => b.charCount);
+	const listItems = lists.reduce((sum, b) => sum + b.items.length, 0);
 
 	console.log(`── stats ──`);
 	console.log(`  chapters:   ${chapterCount}`);
 	console.log(`  text:       ${txt.length}`);
+	console.log(`  headings:   ${headings.length}`);
+	console.log(`  lists:      ${lists.length} (${listItems} items)`);
 	if (failed > 0) {
 		console.log(`  images:     ${img.length} (${failed} unresolved)`);
 	} else {

@@ -1,18 +1,13 @@
 import { parseHTML } from "linkedom";
+import { blockText, materializeBlocks } from "./blocks.ts";
 import type { ParseOptions } from "./config.ts";
 import { DEFAULT_PARSE_OPTIONS } from "./config.ts";
 import { getOpfPath } from "./epub/container.ts";
 import { parseOpf } from "./epub/opf.ts";
 import type { JSZipLike } from "./epub/zip.ts";
 import { EpubZip } from "./epub/zip.ts";
-import type { ImageResolverContext } from "./extractors/image/types.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
-import type {
-	Block,
-	ParsedBook,
-	ParsedChapter,
-	StyleMapping,
-} from "./types.ts";
+import type { ParsedBook, ParsedChapter, StyleMapping } from "./types.ts";
 import { parseCssStyles } from "./utils/css.ts";
 import { decodeEntities } from "./utils/entities.ts";
 
@@ -33,13 +28,13 @@ const FM_TITLES = new Set([
  * Data-driven rules (verified against 20 EPUBs, zero false positives):
  *   1. Title matches a known FM pattern
  *   2. Title is identical to the book title (title page repeat)
- *   3. One of first 3 chapters with <3 text blocks and <30 words
+ *   3. One of first 3 chapters with <3 prose blocks and <30 words
  */
 function isFrontMatter(
 	chapterTitle: string,
 	bookTitle: string,
 	chapterIndex: number,
-	textBlockCount: number,
+	proseBlockCount: number,
 	wordCount: number,
 ): boolean {
 	const title = chapterTitle
@@ -49,7 +44,7 @@ function isFrontMatter(
 	return (
 		FM_TITLES.has(title) ||
 		chapterTitle === bookTitle ||
-		(chapterIndex < 3 && textBlockCount < 3 && wordCount < 30)
+		(chapterIndex < 3 && proseBlockCount < 3 && wordCount < 30)
 	);
 }
 
@@ -70,17 +65,13 @@ export async function parseEpubFromFile(
 	return parseEpubFromZip(zip, options as ParseOptions | undefined);
 }
 
-/**
- * Parse an EPUB from an already-opened zip wrapper.
- * Useful when using non-AdmZip backends (e.g., JSZip in the browser).
- */
+/** The shared core — both runtime entry points open a zip and hand it here. */
 export async function parseEpubFromZip(
 	zip: EpubZip,
 	opts?: ParseOptions,
 ): Promise<ParsedBook> {
 	const options: ParseOptions = opts ?? DEFAULT_PARSE_OPTIONS;
 
-	// 1. Locate and parse OPF
 	const opfRel = getOpfPath(zip);
 	const opfXml = zip.readText(opfRel);
 	if (!opfXml) {
@@ -91,11 +82,9 @@ export async function parseEpubFromZip(
 	const bookTitle = opf.title;
 	const bookAuthor = opf.author;
 
-	// 2b. Extract cover image from OPF metadata
 	let coverImage: Uint8Array | null = null;
 	try {
 		const { document: metaDoc } = parseHTML(opfXml);
-		// Find <meta name="cover" content="..."> in OPF metadata
 		for (const el of metaDoc.querySelectorAll("*")) {
 			const tag = (el.tagName || "").toLowerCase();
 			if (
@@ -117,7 +106,6 @@ export async function parseEpubFromZip(
 		// Cover image is optional — silently skip if not found
 	}
 
-	// 3. Build XHTML content map (for title extractors)
 	const xhtmlFiles = new Map<string, string>();
 	const spineMap: { href: string; itemId: string }[] = [];
 
@@ -135,7 +123,6 @@ export async function parseEpubFromZip(
 		spineMap.push({ href: xhtmlPath, itemId: sp.idref });
 	}
 
-	// 2b. Build CSS class → style map from all CSS files in the manifest
 	const cssMap = new Map<string, StyleMapping>();
 	for (const item of opf.manifest.values()) {
 		if (item.mediaType === "text/css") {
@@ -150,7 +137,6 @@ export async function parseEpubFromZip(
 		}
 	}
 
-	// 3. Extract chapter titles
 	const titleParams: TitleExtractorParams = { zip, opf, xhtmlFiles };
 	const titleMap = await options.titleExtractor.extract(titleParams);
 
@@ -161,7 +147,6 @@ export async function parseEpubFromZip(
 		}
 	}
 
-	// 4. Process spine → blocks
 	const chapters: ParsedChapter[] = [];
 	let chapterIndex = 0;
 
@@ -179,47 +164,27 @@ export async function parseEpubFromZip(
 			titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`,
 		);
 
-		const blocks: Block[] = rawBlocks.map((b, i) => {
-			if (b.type === "text") {
-				return {
-					type: "text",
-					id: `c${chapterIndex}-${i}`,
-					content: b.content,
-					runs: b.runs,
-					charCount: b.content.length,
-					chapterIndex,
-					position: i,
-				} as const;
-			}
+		const blocks = materializeBlocks(
+			rawBlocks,
+			chapterIndex,
+			`c${chapterIndex}-`,
+			(src) => {
+				const data = options.imageResolver.resolve({
+					zip,
+					opf,
+					src,
+					xhtmlPath,
+				});
+				if (options.debug && !data) {
+					console.error(`[image] ${options.imageResolver.name} failed: ${src}`);
+				}
+				return data;
+			},
+		);
 
-			const imgCtx: ImageResolverContext = {
-				zip,
-				opf,
-				src: b.content,
-				xhtmlPath,
-			};
-			const data = options.imageResolver.resolve(imgCtx);
-
-			if (options.debug && !data) {
-				console.error(
-					`[image] ${options.imageResolver.name} failed: ${b.content}`,
-				);
-			}
-
-			return {
-				type: "image",
-				id: `c${chapterIndex}-${i}`,
-				src: b.content,
-				alt: b.alt,
-				data,
-				chapterIndex,
-				position: i,
-			} as const;
-		});
-
-		const textBlocks = blocks.filter((b) => b.type === "text");
-		const wordCount = textBlocks.reduce(
-			(s, b) => s + b.content.split(/\s+/).length,
+		const proseBlocks = blocks.filter((b) => b.type !== "image");
+		const wordCount = proseBlocks.reduce(
+			(s, b) => s + blockText(b).split(/\s+/).length,
 			0,
 		);
 
@@ -231,7 +196,7 @@ export async function parseEpubFromZip(
 				chapterTitle,
 				decodeEntities(bookTitle),
 				chapterIndex,
-				textBlocks.length,
+				proseBlocks.length,
 				wordCount,
 			),
 		});
