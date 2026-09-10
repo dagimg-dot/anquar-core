@@ -21,7 +21,9 @@ export function parseNcx(ncxXml: string): Map<string, string> {
 	for (const el of doc.querySelectorAll("*")) {
 		const tag = (el.tagName || "").toLowerCase();
 		if (tag === "navpoint" || tag.endsWith(":navpoint")) {
-			const textEl = findChild(el, "text");
+			// <navPoint><navLabel><text>Title</text></navLabel><content src=…/>
+			const labelEl = findChild(el, "navLabel");
+			const textEl = labelEl && findChild(labelEl, "text");
 			const contentEl = findChild(el, "content");
 			if (!textEl || !contentEl) continue;
 
@@ -38,9 +40,10 @@ export function parseNcx(ncxXml: string): Map<string, string> {
 
 /** Find first child element with a matching local tag name (ignoring namespace). */
 function findChild(parent: Element, localName: string): Element | null {
+	const wanted = localName.toLowerCase();
 	for (const child of parent.children || []) {
 		const tag = (child.tagName || "").toLowerCase();
-		if (tag === localName || tag.endsWith(`:${localName}`)) {
+		if (tag === wanted || tag.endsWith(`:${wanted}`)) {
 			return child as Element;
 		}
 	}
