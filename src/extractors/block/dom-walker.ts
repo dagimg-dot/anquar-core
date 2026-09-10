@@ -78,6 +78,26 @@ const BLOCK_TAGS = new Set([
 	"pre",
 ]);
 
+/** Elements whose bold-only text may stand in for a heading. */
+const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
+
+const TITLE_MAX_CHARS = 70;
+
+/**
+ * A short paragraph set wholly in bold is a section title the publisher never
+ * marked up as a heading — routine in scanned and converted books. Trailing
+ * sentence punctuation rules out a bold opening line of prose.
+ */
+function readsAsTitle(runs: StyleRun[], text: string): boolean {
+	if (text.length < 2 || text.length > TITLE_MAX_CHARS) return false;
+	if (/[.!?;:,]$/.test(text)) return false;
+	if (!/[\p{L}\p{N}]/u.test(text)) return false;
+	// A lowercase or dash-led opening marks a wrapped line or an attribution,
+	// not a title.
+	if (!/^[\p{Lu}\p{N}"'“‘([]/u.test(text)) return false;
+	return runs.every((r) => r.bold || !r.text.trim());
+}
+
 const SKIP_TAGS = new Set([
 	"script",
 	"style",
@@ -100,6 +120,24 @@ const SKIP_TAGS = new Set([
  * Handles nested/inherited styling — style flags propagate
  * through the DOM tree via the recursive walker.
  */
+/**
+ * A title introduces prose, and that prose opens a sentence. Requiring both
+ * leaves runs of bold lines (blurbs, title pages) and bold text wrapped across
+ * lines as the body text they are.
+ */
+function promoteTitles(blocks: RawBlock[], candidates: Set<number>): void {
+	for (const i of candidates) {
+		const next = blocks[i + 1];
+		if (next?.type !== "text" || candidates.has(i + 1)) continue;
+		if (!/^[\p{Lu}\p{N}"'“‘]/u.test(next.content.trim())) continue;
+
+		const block = blocks[i];
+		if (block.type !== "text") continue;
+		const runs = collapseRuns(block.runs);
+		blocks[i] = { type: "heading", level: 2, content: runsText(runs), runs };
+	}
+}
+
 export class DomWalkerBlockExtractor implements BlockExtractor {
 	readonly name = "dom-walker";
 
@@ -127,14 +165,27 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 		const tagOf = (n: WalkNode): string => (n.tagName || "").toLowerCase();
 
+		// The element the pending runs came from, so flush can tell a bold
+		// paragraph apart from a bold table cell.
+		let pendingTag = "";
+		const titleCandidates = new Set<number>();
+
 		const flush = () => {
 			if (runs.length === 0) return;
 			const norm = normalizeRuns(runs);
 			const content = runsText(norm);
 			if (content.trim()) {
+				const collapsed = collapseRuns(norm);
+				if (
+					TITLE_HOST_TAGS.has(pendingTag) &&
+					readsAsTitle(collapsed, runsText(collapsed))
+				) {
+					titleCandidates.add(blocks.length);
+				}
 				blocks.push({ type: "text", content, runs: norm });
 			}
 			runs.length = 0;
+			pendingTag = "";
 		};
 
 		const isSingleImageWrapper = (n: WalkNode): boolean => {
@@ -302,6 +353,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (isBlock && runs.length > 0 && !isSingleImageWrapper(n)) {
 				flush();
 			}
+			if (isBlock) pendingTag = tag;
 
 			for (const c of n.childNodes ?? []) {
 				walk(c, style);
@@ -312,6 +364,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 		walk(body as unknown as WalkNode, { bold: false, italic: false });
 		flush();
+		promoteTitles(blocks, titleCandidates);
 
 		return blocks;
 	}
