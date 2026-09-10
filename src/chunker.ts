@@ -10,6 +10,8 @@ import type {
 } from "./types.ts";
 import { normalizeRuns, runsText } from "./utils/runs.ts";
 
+const SENTENCE_END = /[.!?。！？"'”’»）」』]$/;
+
 export function splitSentences(text: string): string[] {
 	const ABBREVIATIONS =
 		/\b(?:Dr|Mr|Mrs|Ms|St|vs|etc|i\.e|e\.g|dept|approx|Jr|Sr|Prof|Capt|Lt|Col|Gen|Sgt|p\.|pp\.|vol|fig|al|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$/i;
@@ -33,7 +35,7 @@ export function splitSentences(text: string): string[] {
 
 	const merged: string[] = [];
 	for (const c of candidates) {
-		const endsWithTerminal = /[.!?。！？"']$/.test(c);
+		const endsWithTerminal = SENTENCE_END.test(c);
 		const isAbbreviation = ABBREVIATIONS.test(c);
 		if (!endsWithTerminal && merged.length > 0 && !isAbbreviation) {
 			merged[merged.length - 1] += ` ${c}`;
@@ -68,11 +70,7 @@ export function hardSplit(text: string, maxChars: number): string[] {
 	return chunks;
 }
 
-function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
-	const fullText = runsText(runs);
-	const sentences = splitSentences(fullText);
-	if (sentences.length <= 1) return [runs];
-
+function runOffsets(runs: StyleRun[]): number[] {
 	const offsets: number[] = [];
 	let pos = 0;
 	for (const r of runs) {
@@ -80,71 +78,94 @@ function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
 		pos += r.text.length;
 	}
 	offsets.push(pos);
+	return offsets;
+}
 
+function sliceRuns(
+	runs: StyleRun[],
+	offsets: number[],
+	start: number,
+	end: number,
+): StyleRun[] {
+	const group: StyleRun[] = [];
+	for (let i = 0; i < runs.length; i++) {
+		const rStart = offsets[i];
+		const rEnd = offsets[i + 1];
+		if (rEnd <= start) continue;
+		if (rStart >= end) break;
+
+		const clipped = runs[i].text.slice(
+			Math.max(start, rStart) - rStart,
+			Math.min(end, rEnd) - rStart,
+		);
+		if (clipped) group.push({ ...runs[i], text: clipped });
+	}
+	return group;
+}
+
+/**
+ * Span of `needle` within `haystack` at or after `from`, tolerating differences
+ * in whitespace runs — splitSentences normalises spacing, so an exact match
+ * fails on sources whose spacing is irregular.
+ */
+function locate(
+	haystack: string,
+	needle: string,
+	from: number,
+): [number, number] | null {
+	const exact = haystack.indexOf(needle, from);
+	if (exact >= 0) return [exact, exact + needle.length];
+
+	const words = needle.trim().split(/\s+/);
+	if (words.length === 0) return null;
+	const pattern = words
+		.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+		.join("\\s+");
+	const match = new RegExp(pattern, "u").exec(haystack.slice(from));
+	return match
+		? [from + match.index, from + match.index + match[0].length]
+		: null;
+}
+
+function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
+	const fullText = runsText(runs);
+	const sentences = splitSentences(fullText);
+	if (sentences.length <= 1) return [runs];
+
+	const offsets = runOffsets(runs);
 	const result: StyleRun[][] = [];
-	let sentIdx = 0;
+	let cursor = 0;
 
 	for (const sentence of sentences) {
-		const start = fullText.indexOf(sentence, sentIdx);
-		const end = start + sentence.length;
-		sentIdx = end;
-
-		const group: StyleRun[] = [];
-		for (let i = 0; i < runs.length; i++) {
-			const rStart = offsets[i];
-			const rEnd = offsets[i + 1];
-			if (rEnd <= start) continue;
-			if (rStart >= end) break;
-
-			const from = Math.max(start, rStart);
-			const to = Math.min(end, rEnd);
-			const clipped = runs[i].text.slice(from - rStart, to - rStart);
-			if (clipped) group.push({ ...runs[i], text: clipped });
-		}
+		const span = locate(fullText, sentence, cursor);
+		// A sentence we cannot place would slice from the wrong offset, which
+		// duplicates text and drops the tail. Leave the paragraph whole instead.
+		if (!span) return [runs];
+		cursor = span[1];
+		const group = sliceRuns(runs, offsets, span[0], span[1]);
 		if (group.length > 0) result.push(group);
 	}
 
-	return result;
+	return result.length > 0 ? result : [runs];
 }
 
 function hardSplitRuns(runs: StyleRun[], maxChars: number): StyleRun[][] {
 	const fullText = runsText(runs);
 	if (fullText.length <= maxChars) return [runs];
 
-	const textChunks = hardSplit(fullText, maxChars);
-
-	const offsets: number[] = [];
-	let pos = 0;
-	for (const r of runs) {
-		offsets.push(pos);
-		pos += r.text.length;
-	}
-	offsets.push(pos);
-
+	const offsets = runOffsets(runs);
 	const result: StyleRun[][] = [];
-	let charPos = 0;
+	let cursor = 0;
 
-	for (const chunk of textChunks) {
-		const start = charPos;
-		const end = start + chunk.length;
-		charPos = end;
-
-		const group: StyleRun[] = [];
-		for (let i = 0; i < runs.length; i++) {
-			const rStart = offsets[i];
-			const rEnd = offsets[i + 1];
-			if (rEnd <= start) continue;
-			if (rStart >= end) break;
-
-			const from = Math.max(start, rStart);
-			const to = Math.min(end, rEnd);
-			const clipped = runs[i].text.slice(from - rStart, to - rStart);
-			if (clipped) group.push({ ...runs[i], text: clipped });
-		}
+	for (const chunk of hardSplit(fullText, maxChars)) {
+		const span = locate(fullText, chunk, cursor);
+		if (!span) return [runs];
+		cursor = span[1];
+		const group = sliceRuns(runs, offsets, span[0], span[1]);
 		if (group.length > 0) result.push(group);
 	}
 
-	return result;
+	return result.length > 0 ? result : [runs];
 }
 
 function appendRuns(buffer: StyleRun[], incoming: StyleRun[]): void {
@@ -244,7 +265,7 @@ function chunkTextBlock(
 
 	if (pending.length > 0 && bufferRuns.length > 0) {
 		const last = pending[pending.length - 1];
-		const merged = `${last.content} ${bufferText}`;
+		const merged = `${last.content} ${bufferText}`.replace(/\s+/g, " ").trim();
 		if (merged.length <= config.maxChars) {
 			last.content = merged;
 			last.charCount = merged.length;
