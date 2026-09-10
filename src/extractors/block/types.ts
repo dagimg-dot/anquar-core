@@ -1,19 +1,19 @@
-import type { StyleRun, StyleMapping } from "../../types.ts";
+import type { StyleMapping, StyleRun } from "../../types.ts";
 
 /**
  * Raw block extracted from XHTML — before chapter assignment
  * and image binary resolution.
  */
 export interface RawTextBlock {
-  type: "text";
-  content: string;
-  runs: StyleRun[];
+	type: "text";
+	content: string;
+	runs: StyleRun[];
 }
 
 export interface RawImageBlock {
-  type: "image";
-  content: string; // img src
-  alt: string;
+	type: "image";
+	content: string; // img src
+	alt: string;
 }
 
 export type RawBlock = RawTextBlock | RawImageBlock;
@@ -26,6 +26,6 @@ export type RawBlock = RawTextBlock | RawImageBlock;
  * streaming parser) as long as they implement this interface.
  */
 export interface BlockExtractor {
-  readonly name: string;
-  extract(html: string, cssMap?: Map<string, StyleMapping>): RawBlock[];
+	readonly name: string;
+	extract(html: string, cssMap?: Map<string, StyleMapping>): RawBlock[];
 }

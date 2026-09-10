@@ -13,28 +13,28 @@ import type { ImageResolver, ImageResolverContext } from "./types.ts";
  *   3. Try matching by filename only (last path segment)
  */
 export class ManifestImageResolver implements ImageResolver {
-  readonly name = "manifest";
+	readonly name = "manifest";
 
-  resolve(ctx: ImageResolverContext): Uint8Array | null {
-    const { zip, opf, src } = ctx;
+	resolve(ctx: ImageResolverContext): Uint8Array | null {
+		const { zip, opf, src } = ctx;
 
-    // 1. Try resolving relative to OPF dir
-    const opfPath = zip.resolvePath(opf.opfDir, src);
-    const bytes = zip.readBinary(opfPath);
-    if (bytes) return bytes;
+		// 1. Try resolving relative to OPF dir
+		const opfPath = zip.resolvePath(opf.opfDir, src);
+		const bytes = zip.readBinary(opfPath);
+		if (bytes) return bytes;
 
-    // 2. Try matching by filename in manifest
-    const filename = src.split("/").pop();
-    if (filename) {
-      for (const item of opf.manifest.values()) {
-        if (item.href.endsWith(filename)) {
-          const itemPath = zip.resolvePath(opf.opfDir, item.href);
-          const b = zip.readBinary(itemPath);
-          if (b) return b;
-        }
-      }
-    }
+		// 2. Try matching by filename in manifest
+		const filename = src.split("/").pop();
+		if (filename) {
+			for (const item of opf.manifest.values()) {
+				if (item.href.endsWith(filename)) {
+					const itemPath = zip.resolvePath(opf.opfDir, item.href);
+					const b = zip.readBinary(itemPath);
+					if (b) return b;
+				}
+			}
+		}
 
-    return null;
-  }
+		return null;
+	}
 }

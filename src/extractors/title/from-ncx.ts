@@ -1,21 +1,21 @@
 import { parseNcx } from "../../epub/ncx.ts";
-import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 import { normalizeTitleKey } from "../../utils/path.ts";
+import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
 /**
  * Find the NCX file path from the OPF manifest.
  * Falls back to common paths if not found in manifest.
  */
 function findNcxPath(params: TitleExtractorParams): string | null {
-  for (const item of params.opf.manifest.values()) {
-    if (item.mediaType === "application/x-dtbncx+xml") {
-      return params.zip.resolvePath(params.opf.opfDir, item.href);
-    }
-  }
-  for (const guess of ["toc.ncx", "OEBPS/toc.ncx"]) {
-    if (params.zip.has(guess)) return guess;
-  }
-  return null;
+	for (const item of params.opf.manifest.values()) {
+		if (item.mediaType === "application/x-dtbncx+xml") {
+			return params.zip.resolvePath(params.opf.opfDir, item.href);
+		}
+	}
+	for (const guess of ["toc.ncx", "OEBPS/toc.ncx"]) {
+		if (params.zip.has(guess)) return guess;
+	}
+	return null;
 }
 
 /**
@@ -27,28 +27,28 @@ function findNcxPath(params: TitleExtractorParams): string | null {
  * Keys are normalised to match manifest hrefs (relative to OPF dir).
  */
 export class NcxTitleExtractor implements TitleExtractor {
-  readonly name = "ncx";
+	readonly name = "ncx";
 
-  async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
-    const titles = new Map<string, string>();
+	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
+		const titles = new Map<string, string>();
 
-    const ncxPath = findNcxPath(params);
-    if (!ncxPath) return titles;
+		const ncxPath = findNcxPath(params);
+		if (!ncxPath) return titles;
 
-    const ncxXml = params.zip.readText(ncxPath);
-    if (!ncxXml) return titles;
+		const ncxXml = params.zip.readText(ncxPath);
+		if (!ncxXml) return titles;
 
-    const ncxTitles = parseNcx(ncxXml);
-    const ncxDir = params.zip.dirname(ncxPath);
+		const ncxTitles = parseNcx(ncxXml);
+		const ncxDir = params.zip.dirname(ncxPath);
 
-    for (const [href, title] of ncxTitles) {
-      const resolved = ncxDir ? params.zip.resolvePath(ncxDir, href) : href;
-      const key = normalizeTitleKey(params.opf.opfDir, resolved);
-      if (!titles.has(key)) {
-        titles.set(key, title);
-      }
-    }
+		for (const [href, title] of ncxTitles) {
+			const resolved = ncxDir ? params.zip.resolvePath(ncxDir, href) : href;
+			const key = normalizeTitleKey(params.opf.opfDir, resolved);
+			if (!titles.has(key)) {
+				titles.set(key, title);
+			}
+		}
 
-    return titles;
-  }
+		return titles;
+	}
 }

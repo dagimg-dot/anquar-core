@@ -7,20 +7,20 @@
  * Usage: bun run bench.ts
  */
 
-import { readdirSync, statSync } from "fs";
-import { join } from "path";
-import { fileURLToPath } from "url";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const CLI = join(__dirname, "src", "index.ts");
 const samplesDir = join(__dirname, "sample_epubs");
 
 const files = readdirSync(samplesDir)
-  .filter((f: string) => f.endsWith(".epub"))
-  .sort();
+	.filter((f: string) => f.endsWith(".epub"))
+	.sort();
 
 console.log(
-  `${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Blocks".padEnd(7)}`,
+	`${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Blocks".padEnd(7)}`,
 );
 console.log("─".repeat(75));
 
@@ -28,35 +28,35 @@ let totalTime = 0;
 let totalBlocks = 0;
 
 for (const file of files) {
-  const path = join(samplesDir, file);
-  const sizeBytes = statSync(path).size;
-  const size = (sizeBytes / 1024 / 1024).toFixed(1) + "M";
+	const path = join(samplesDir, file);
+	const sizeBytes = statSync(path).size;
+	const size = `${(sizeBytes / 1024 / 1024).toFixed(1)}M`;
 
-  const t0 = performance.now();
-  const proc = Bun.spawnSync(["bun", "run", CLI, "parse", path, "--stats"], {
-    env: { ...process.env },
-  });
-  const elapsed = (performance.now() - t0).toFixed(0);
+	const t0 = performance.now();
+	const proc = Bun.spawnSync(["bun", "run", CLI, "parse", path, "--stats"], {
+		env: { ...process.env },
+	});
+	const elapsed = (performance.now() - t0).toFixed(0);
 
-  const stdout = proc.stdout.toString();
-  const stderr = proc.stderr.toString();
+	const _stdout = proc.stdout.toString();
+	const stderr = proc.stderr.toString();
 
-  // Parse chapters and blocks from stderr (tracing goes to stderr)
-  const chapMatch = stderr.match(/(\d+) chapters? → (\d+) blocks?/);
-  const chaps = chapMatch?.[1] ?? "?";
-  const blocks = parseInt(chapMatch?.[2] ?? "0");
+	// Parse chapters and blocks from stderr (tracing goes to stderr)
+	const chapMatch = stderr.match(/(\d+) chapters? → (\d+) blocks?/);
+	const chaps = chapMatch?.[1] ?? "?";
+	const blocks = parseInt(chapMatch?.[2] ?? "0", 10);
 
-  totalTime += parseInt(elapsed);
-  totalBlocks += blocks;
+	totalTime += parseInt(elapsed, 10);
+	totalBlocks += blocks;
 
-  const status = proc.exitCode === 0 ? " " : "⚠";
-  console.log(
-    `${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(blocks).padEnd(7)}`,
-  );
+	const status = proc.exitCode === 0 ? " " : "⚠";
+	console.log(
+		`${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(blocks).padEnd(7)}`,
+	);
 
-  if (proc.exitCode !== 0) {
-    console.error(`  └─ exit ${proc.exitCode}: ${stderr.slice(0, 200)}`);
-  }
+	if (proc.exitCode !== 0) {
+		console.error(`  └─ exit ${proc.exitCode}: ${stderr.slice(0, 200)}`);
+	}
 }
 
 console.log("─".repeat(75));

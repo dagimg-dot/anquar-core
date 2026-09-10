@@ -10,15 +10,15 @@ import type { ImageResolver, ImageResolverContext } from "./types.ts";
  *   3. (Future) via-base64 (embedded data URIs)
  */
 export class ImageChain implements ImageResolver {
-  readonly name = "chain";
+	readonly name = "chain";
 
-  constructor(private resolvers: ImageResolver[]) {}
+	constructor(private resolvers: ImageResolver[]) {}
 
-  resolve(ctx: ImageResolverContext): Uint8Array | null {
-    for (const r of this.resolvers) {
-      const bytes = r.resolve(ctx);
-      if (bytes) return bytes;
-    }
-    return null;
-  }
+	resolve(ctx: ImageResolverContext): Uint8Array | null {
+		for (const r of this.resolvers) {
+			const bytes = r.resolve(ctx);
+			if (bytes) return bytes;
+		}
+		return null;
+	}
 }

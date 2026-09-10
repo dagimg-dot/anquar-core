@@ -14,22 +14,22 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  * the heading extractor's result for that chapter is ignored.
  */
 export class TitleChain implements TitleExtractor {
-  readonly name = "chain";
+	readonly name = "chain";
 
-  constructor(private extractors: TitleExtractor[]) {}
+	constructor(private extractors: TitleExtractor[]) {}
 
-  async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
-    const merged = new Map<string, string>();
+	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
+		const merged = new Map<string, string>();
 
-    for (const ext of this.extractors) {
-      const titles = await ext.extract(params);
-      for (const [href, title] of titles) {
-        if (!merged.has(href)) {
-          merged.set(href, title);
-        }
-      }
-    }
+		for (const ext of this.extractors) {
+			const titles = await ext.extract(params);
+			for (const [href, title] of titles) {
+				if (!merged.has(href)) {
+					merged.set(href, title);
+				}
+			}
+		}
 
-    return merged;
-  }
+		return merged;
+	}
 }

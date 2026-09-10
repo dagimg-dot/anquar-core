@@ -12,30 +12,30 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  * Returns null for files where no heading is found.
  */
 export class HeadingTitleExtractor implements TitleExtractor {
-  readonly name = "heading";
+	readonly name = "heading";
 
-  async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
-    const titles = new Map<string, string>();
+	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
+		const titles = new Map<string, string>();
 
-    for (const [href, html] of params.xhtmlFiles) {
-      let doc: ReturnType<typeof parseHTML>["document"];
-      try {
-        doc = parseHTML(html).document;
-      } catch {
-        continue;
-      }
-      const body = doc.querySelector("body");
-      if (!body) continue;
+		for (const [href, html] of params.xhtmlFiles) {
+			let doc: ReturnType<typeof parseHTML>["document"];
+			try {
+				doc = parseHTML(html).document;
+			} catch {
+				continue;
+			}
+			const body = doc.querySelector("body");
+			if (!body) continue;
 
-      const heading = body.querySelector("h1") || body.querySelector("h2");
-      if (!heading) continue;
+			const heading = body.querySelector("h1") || body.querySelector("h2");
+			if (!heading) continue;
 
-      const text = (heading.textContent || "").trim();
-      if (!text) continue;
+			const text = (heading.textContent || "").trim();
+			if (!text) continue;
 
-      titles.set(href, text);
-    }
+			titles.set(href, text);
+		}
 
-    return titles;
-  }
+		return titles;
+	}
 }

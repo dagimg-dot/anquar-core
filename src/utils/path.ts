@@ -9,15 +9,15 @@
  * Returns: "html/ch1.xhtml"
  */
 export function normalizeTitleKey(opfDir: string, fullPath: string): string {
-  let p = fullPath;
-  // Strip anchor/fragment
-  const hash = p.indexOf("#");
-  if (hash !== -1) p = p.slice(0, hash);
-  // Strip opfDir prefix
-  if (opfDir && p.startsWith(opfDir)) {
-    p = p.slice(opfDir.length);
-  }
-  // Strip ./ prefix
-  if (p.startsWith("./")) p = p.slice(2);
-  return p;
+	let p = fullPath;
+	// Strip anchor/fragment
+	const hash = p.indexOf("#");
+	if (hash !== -1) p = p.slice(0, hash);
+	// Strip opfDir prefix
+	if (opfDir && p.startsWith(opfDir)) {
+		p = p.slice(opfDir.length);
+	}
+	// Strip ./ prefix
+	if (p.startsWith("./")) p = p.slice(2);
+	return p;
 }

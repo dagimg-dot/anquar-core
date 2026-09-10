@@ -1,15 +1,15 @@
-import type { EpubZip } from "../../epub/zip.ts";
 import type { ParsedOpf } from "../../epub/opf.ts";
+import type { EpubZip } from "../../epub/zip.ts";
 
 /**
  * Context passed to title extractors.
  * Provides access to all EPUB resources the extractor might need.
  */
 export interface TitleExtractorParams {
-  zip: EpubZip;
-  opf: ParsedOpf;
-  /** All XHTML content documents keyed by their manifest href. */
-  xhtmlFiles: Map<string, string>;
+	zip: EpubZip;
+	opf: ParsedOpf;
+	/** All XHTML content documents keyed by their manifest href. */
+	xhtmlFiles: Map<string, string>;
 }
 
 /**
@@ -21,6 +21,6 @@ export interface TitleExtractorParams {
  *   The chain merges multiple extractors' results (first wins).
  */
 export interface TitleExtractor {
-  readonly name: string;
-  extract(params: TitleExtractorParams): Promise<Map<string, string>>;
+	readonly name: string;
+	extract(params: TitleExtractorParams): Promise<Map<string, string>>;
 }

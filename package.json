@@ -1,33 +1,33 @@
 {
-  "name": "anquar-core",
-  "version": "0.1.0",
-  "description": "Book content chunker — replaces mindless scrolling with meaningful scrolling",
-  "type": "module",
-  "main": "src/anquar-core.ts",
-  "exports": {
-    ".": "./src/anquar-core.ts"
-  },
-  "bin": {
-    "anquar": "src/index.ts"
-  },
-  "scripts": {
-    "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit",
-    "format": "bunx prettier --write src/",
-    "check": "bunx prettier --check src/ && bunx tsc --noEmit",
-    "test": "bun run src/test.ts",
-    "bench": "bun run bench.ts",
-    "dev": "bun --watch run src/index.ts"
-  },
-  "dependencies": {
-    "@mozilla/readability": "^0.6.0",
-    "adm-zip": "^0.6.0",
-    "linkedom": "^0.18.13"
-  },
-  "devDependencies": {
-    "@types/adm-zip": "^0.5.8",
-    "@types/node": "^22.0.0",
-    "prettier": "^3.9.5",
-    "typescript": "^5.7.0"
-  }
+	"name": "anquar-core",
+	"version": "0.1.0",
+	"description": "Book content chunker — replaces mindless scrolling with meaningful scrolling",
+	"type": "module",
+	"main": "src/anquar-core.ts",
+	"exports": {
+		".": "./src/anquar-core.ts"
+	},
+	"bin": {
+		"anquar": "src/index.ts"
+	},
+	"scripts": {
+		"start": "bun run src/index.ts",
+		"typecheck": "tsc --noEmit",
+		"format": "biome format --write",
+		"check": "biome check --write && tsc --noEmit",
+		"test": "bun run src/test.ts",
+		"bench": "bun run bench.ts",
+		"dev": "bun --watch run src/index.ts"
+	},
+	"dependencies": {
+		"@mozilla/readability": "^0.6.0",
+		"adm-zip": "^0.6.0",
+		"linkedom": "^0.18.13"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.13",
+		"@types/adm-zip": "^0.5.8",
+		"@types/node": "^22.0.0",
+		"typescript": "^5.7.0"
+	}
 }
