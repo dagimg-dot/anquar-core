@@ -12,7 +12,11 @@ import type { ImageResolver, ImageResolverContext } from "./types.ts";
 export class ImageChain implements ImageResolver {
 	readonly name = "chain";
 
-	constructor(private resolvers: ImageResolver[]) {}
+	private readonly resolvers: ImageResolver[];
+
+	constructor(resolvers: ImageResolver[]) {
+		this.resolvers = resolvers;
+	}
 
 	resolve(ctx: ImageResolverContext): Uint8Array | null {
 		for (const r of this.resolvers) {

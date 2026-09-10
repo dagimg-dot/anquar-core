@@ -16,7 +16,11 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 export class TitleChain implements TitleExtractor {
 	readonly name = "chain";
 
-	constructor(private extractors: TitleExtractor[]) {}
+	private readonly extractors: TitleExtractor[];
+
+	constructor(extractors: TitleExtractor[]) {
+		this.extractors = extractors;
+	}
 
 	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
 		const merged = new Map<string, string>();

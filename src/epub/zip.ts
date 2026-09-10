@@ -1,11 +1,9 @@
-import AdmZip from "adm-zip";
-
 interface ZipEntry {
 	text: string;
 	binary: Uint8Array | null;
 }
 
-/** Structural view of a JSZip instance, so this file needs no JSZip dependency. */
+/** Structural views of the two zip backends, so this file depends on neither. */
 interface JSZipEntry {
 	dir: boolean;
 	async(type: "string"): Promise<string>;
@@ -16,18 +14,26 @@ export interface JSZipLike {
 	files: Record<string, JSZipEntry>;
 }
 
+interface AdmZipLike {
+	getEntries(): {
+		entryName: string;
+		isDirectory: boolean;
+		getData(): Uint8Array;
+	}[];
+}
+
 /**
  * Unified ZIP reader that works with both AdmZip (Node/Bun) and JSZip (browser).
  *
  * All access methods are synchronous — the JSZip path pre-loads every
- * entry into memory before any method is called.
+ * entry into memory before any method is called. Both backends are injected
+ * by the caller so neither runtime's package reaches the other's bundle.
  *
  * @example
- *   // Node / Bun
- *   const zip = EpubZip.fromPath("book.epub");
+ *   // Node / Bun — see parseEpub in anquar-core/node
+ *   const zip = EpubZip.fromAdmZip(new AdmZip("book.epub"));
  *
  *   // Browser
- *   const JSZip = await import("jszip");
  *   const zip = await EpubZip.fromJSZip(await JSZip.loadAsync(file));
  */
 export class EpubZip {
@@ -35,21 +41,17 @@ export class EpubZip {
 
 	private constructor() {}
 
-	/** Create from a file path (Node/Bun) or raw bytes. Uses AdmZip internally. */
-	static fromPath(input: string | Uint8Array): EpubZip {
+	/** Create from an AdmZip instance (Node/Bun). */
+	static fromAdmZip(zip: AdmZipLike): EpubZip {
 		const result = new EpubZip();
-		const zip =
-			typeof input === "string"
-				? new AdmZip(input)
-				: new AdmZip(input as unknown as Buffer);
+		const decoder = new TextDecoder();
 		for (const entry of zip.getEntries()) {
-			if (!entry.isDirectory) {
-				const buf = entry.getData();
-				result.entries.set(entry.entryName, {
-					text: buf.toString("utf-8"),
-					binary: buf,
-				});
-			}
+			if (entry.isDirectory) continue;
+			const bytes = entry.getData();
+			result.entries.set(entry.entryName, {
+				text: decoder.decode(bytes),
+				binary: bytes,
+			});
 		}
 		return result;
 	}
@@ -83,12 +85,10 @@ export class EpubZip {
 		return this.entries.get(path)?.binary ?? null;
 	}
 
-	/** Check if a path exists. */
 	has(path: string): boolean {
 		return this.entries.has(path);
 	}
 
-	/** List entries matching a prefix. */
 	list(prefix: string): string[] {
 		const result: string[] = [];
 		for (const key of this.entries.keys()) {
@@ -110,7 +110,6 @@ export class EpubZip {
 		return out.join("/");
 	}
 
-	/** Directory part of a path. */
 	dirname(path: string): string {
 		const i = path.lastIndexOf("/");
 		return i >= 0 ? path.slice(0, i + 1) : "";

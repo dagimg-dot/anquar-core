@@ -2,7 +2,7 @@
 
 import { chunkBook } from "./chunker.ts";
 import type { ParseOptions } from "./config.ts";
-import { parseEpub } from "./parser.ts";
+import { parseEpub } from "./node.ts";
 import type { Block, ChunkConfig } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 

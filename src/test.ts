@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chunkBook, hardSplit, splitSentences } from "./chunker.ts";
 import { parseArticle } from "./everything/article.ts";
-import { parseEpub } from "./parser.ts";
+import { parseEpub } from "./node.ts";
 import type { ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 

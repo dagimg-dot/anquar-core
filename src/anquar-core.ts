@@ -15,8 +15,8 @@ export type { ArticleOptions } from "./everything/article.ts";
 
 // Article parser
 export { parseArticle } from "./everything/article.ts";
-// EPUB parser
-export { parseEpub, parseEpubFromFile, parseEpubFromZip } from "./parser.ts";
+// parseEpub (path-based) lives in ./node.ts — it is Node-only.
+export { parseEpubFromFile, parseEpubFromZip } from "./parser.ts";
 // Types
 export type {
 	Block,

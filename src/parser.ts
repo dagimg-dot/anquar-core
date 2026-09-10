@@ -54,34 +54,6 @@ function isFrontMatter(
 }
 
 /**
- * Parse an EPUB file into structured chapters with interleaved
- * text and image blocks.
- *
- * Uses pluggable extractors for title resolution, image resolution,
- * and block extraction — pass a custom `ParseOptions` to override
- * any strategy.
- *
- * @param input — path to the .epub file, or raw bytes of the EPUB
- * @param options — optional strategy overrides (all fields have safe defaults)
- */
-export async function parseEpub(
-	input: string | Uint8Array,
-	options?: Partial<ParseOptions>,
-): Promise<ParsedBook> {
-	const opts: ParseOptions = {
-		titleExtractor:
-			options?.titleExtractor ?? DEFAULT_PARSE_OPTIONS.titleExtractor,
-		imageResolver:
-			options?.imageResolver ?? DEFAULT_PARSE_OPTIONS.imageResolver,
-		blockExtractor:
-			options?.blockExtractor ?? DEFAULT_PARSE_OPTIONS.blockExtractor,
-		debug: options?.debug ?? DEFAULT_PARSE_OPTIONS.debug,
-	};
-	const zip = EpubZip.fromPath(input);
-	return parseEpubFromZip(zip, opts);
-}
-
-/**
  * Parse an EPUB from a browser File object using JSZip.
  * JSZip must be passed in (it's a peer dependency, not bundled).
  *

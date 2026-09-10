@@ -5,7 +5,8 @@
 	"type": "module",
 	"main": "src/anquar-core.ts",
 	"exports": {
-		".": "./src/anquar-core.ts"
+		".": "./src/anquar-core.ts",
+		"./node": "./src/node.ts"
 	},
 	"bin": {
 		"anquar": "src/index.ts"
