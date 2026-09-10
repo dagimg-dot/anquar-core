@@ -6,10 +6,6 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  *
  * This is a fallback for books without NCX entries or with missing
  * NCX titles for some chapters (e.g. front/back matter).
- *
- * Strategy: For each XHTML file, find the first <h1> or <h2>
- * in the body and use its text content as the title.
- * Returns null for files where no heading is found.
  */
 export class HeadingTitleExtractor implements TitleExtractor {
 	readonly name = "heading";

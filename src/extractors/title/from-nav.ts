@@ -8,11 +8,6 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  * EPUB3 uses an XHTML navigation document with <nav epub:type="toc">
  * as the canonical table of contents. This is often richer than the
  * legacy NCX (more entries, better titles).
- *
- * Strategy:
- *   1. Find nav.xhtml via the OPF manifest or common paths
- *   2. Parse it and extract all <a> href+text from the TOC nav element
- *   3. Return a Map of href (anchor-stripped) → title
  */
 export class NavTitleExtractor implements TitleExtractor {
 	readonly name = "nav";
@@ -20,7 +15,6 @@ export class NavTitleExtractor implements TitleExtractor {
 	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
 		const titles = new Map<string, string>();
 
-		// Find nav.xhtml path from manifest or common locations
 		const navPath = this.findNavPath(params);
 		if (!navPath) return titles;
 
@@ -47,7 +41,6 @@ export class NavTitleExtractor implements TitleExtractor {
 		}
 		if (!tocNav) return titles;
 
-		// Extract all <a> tags recursively from the TOC nav
 		const links = tocNav.querySelectorAll("a");
 		const navDir = params.zip.dirname(navPath);
 
@@ -56,7 +49,6 @@ export class NavTitleExtractor implements TitleExtractor {
 			const text = (link.textContent || "").trim();
 			if (!href || !text) continue;
 
-			// Strip fragment and normalize path
 			const base = href.split("#")[0];
 			const resolved = navDir ? params.zip.resolvePath(navDir, base) : base;
 			const key = normalizeTitleKey(params.opf.opfDir, resolved);
@@ -70,7 +62,6 @@ export class NavTitleExtractor implements TitleExtractor {
 	}
 
 	private findNavPath(params: TitleExtractorParams): string | null {
-		// 1. Look in OPF manifest for nav item
 		for (const item of params.opf.manifest.values()) {
 			if (
 				item.mediaType === "application/xhtml+xml" &&
@@ -81,7 +72,6 @@ export class NavTitleExtractor implements TitleExtractor {
 			}
 		}
 
-		// 2. Try common paths
 		for (const guess of [
 			"nav.xhtml",
 			"OEBPS/nav.xhtml",

@@ -6,14 +6,6 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
  *
  * Some publishers put chapter numbers or names in <title>
  * but not in visible <h1>/<h2> elements.
- *
- * Strategy: For each XHTML file, extract the <title> element
- * content and use it if it looks like a meaningful title
- * (not just the book name repeated).
- *
- * Falls back to null for files where:
- *  - The <title> is identical to the book title (likely front/back matter)
- *  - The <title> is empty
  */
 const MAX_TITLE_LENGTH = 60;
 

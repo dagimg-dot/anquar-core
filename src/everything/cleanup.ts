@@ -14,7 +14,6 @@ export function asFullHtml(html: string): string {
  * - Short elements (< 200 chars) whose text matches boilerplate patterns
  */
 export function cleanupArticle(html: string): string {
-	// Wrap in a full document so linkedom populates body correctly.
 	let doc: ReturnType<typeof parseHTML>["document"];
 	try {
 		doc = parseHTML(asFullHtml(html)).document;
@@ -46,7 +45,6 @@ export function cleanupArticle(html: string): string {
 		el.remove();
 	}
 
-	// Serialize remaining content — get innerHTML of the readability container
 	const page = body.firstElementChild;
 	return page ? page.innerHTML || page.textContent || "" : body.innerHTML || "";
 }

@@ -34,7 +34,6 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 		return { opfDir, manifest, spine, title: "Unknown", author: "Unknown" };
 	}
 
-	// ── Metadata ────────────────────────────────────────────────
 	// Namespaced elements like dc:title aren't reliably queriable,
 	// so iterate all elements and match on tag name.
 	let title = "Unknown";
@@ -51,7 +50,6 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 		}
 	}
 
-	// ── Manifest ────────────────────────────────────────────────
 	for (const el of doc.querySelectorAll("*")) {
 		const tag = (el.tagName || "").toLowerCase();
 		// Match "item" in any namespace (default opf or otherwise)
@@ -65,7 +63,6 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 		}
 	}
 
-	// ── Spine ────────────────────────────────────────────────────
 	for (const el of doc.querySelectorAll("*")) {
 		const tag = (el.tagName || "").toLowerCase();
 		if (tag === "itemref" || tag.endsWith(":itemref")) {
