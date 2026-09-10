@@ -381,18 +381,17 @@ export function chunkBlocks(
 
 /**
  * Chunk an entire parsed book chapter by chapter.
- * Adds chapter header blocks when includeChapterHeaders is enabled, unless
- * the chapter already opens with a heading carrying that same title.
+ * Adds chapter header blocks when includeChapterHeaders is enabled.
  */
 export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
 	const result: Block[] = [];
 
 	for (const chapter of book.chapters) {
-		const [first] = chapter.blocks;
-		const selfTitled =
-			first?.type === "heading" && first.content === chapter.title;
+		// A chapter that opens with its own heading needs no synthetic one, and
+		// an untitled chapter has nothing truthful to put on the card.
+		const opensWithHeading = chapter.blocks[0]?.type === "heading";
 
-		if (config.includeChapterHeaders && !selfTitled) {
+		if (config.includeChapterHeaders && chapter.title && !opensWithHeading) {
 			result.push({
 				type: "heading",
 				id: `ch-${chapter.index}`,

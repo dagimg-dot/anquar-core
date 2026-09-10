@@ -344,7 +344,10 @@ async function run() {
 
 			for (const ch of book.chapters) {
 				assert(ch.index >= 0, `${name}: chapter ${ch.index} has valid index`);
-				assert(!!ch.title, `${name}: chapter ${ch.index} has title`);
+				assert(
+					ch.title === ch.title.trim(),
+					`${name}: chapter ${ch.index} title is trimmed`,
+				);
 				assert(ch.blocks.length > 0, `${name}: chapter ${ch.index} has blocks`);
 
 				for (const b of ch.blocks) {

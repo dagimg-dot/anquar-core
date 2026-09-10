@@ -160,9 +160,7 @@ export async function parseEpubFromZip(
 		const rawBlocks = options.blockExtractor.extract(html, cssMap);
 		if (rawBlocks.length === 0) continue;
 
-		const chapterTitle = decodeEntities(
-			titleMap.get(item.href) || `Chapter ${chapterIndex + 1}`,
-		);
+		const chapterTitle = decodeEntities(titleMap.get(item.href) ?? "");
 
 		const blocks = materializeBlocks(
 			rawBlocks,
