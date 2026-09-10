@@ -36,19 +36,37 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 
 	// Namespaced elements like dc:title aren't reliably queriable,
 	// so iterate all elements and match on tag name.
-	let title = "Unknown";
+	// A book may carry several dc:title elements — typically the title and its
+	// subtitle. EPUB 3 marks the real one with a title-type refinement; without
+	// that, the first is the title and the rest are subtitles.
+	const titles: { id: string; text: string }[] = [];
+	let mainTitleId = "";
 	let author = "Unknown";
+
 	for (const el of doc.querySelectorAll("*")) {
 		const tag = (el.tagName || "").toLowerCase();
+		const text = (el.textContent || "").trim();
+
 		if (tag === "dc:title" || tag.endsWith(":title")) {
-			const t = (el.textContent || "").trim();
-			if (t) title = t;
-		}
-		if (tag === "dc:creator" || tag.endsWith(":creator")) {
-			const a = (el.textContent || "").trim();
-			if (a) author = a;
+			if (text) titles.push({ id: el.getAttribute("id") ?? "", text });
+		} else if (tag === "dc:creator" || tag.endsWith(":creator")) {
+			// Exporters leave list separators behind on a single-author field.
+			if (text && author === "Unknown") author = text.replace(/[;,]\s*$/, "");
+		} else if (tag === "meta" || tag.endsWith(":meta")) {
+			if (
+				el.getAttribute("property") === "title-type" &&
+				text === "main" &&
+				!mainTitleId
+			) {
+				mainTitleId = (el.getAttribute("refines") ?? "").replace(/^#/, "");
+			}
 		}
 	}
+
+	const title =
+		titles.find((t) => t.id && t.id === mainTitleId)?.text ??
+		titles[0]?.text ??
+		"Unknown";
 
 	for (const el of doc.querySelectorAll("*")) {
 		const tag = (el.tagName || "").toLowerCase();
