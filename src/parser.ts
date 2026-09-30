@@ -10,6 +10,7 @@ import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import type { ParsedBook, ParsedChapter, StyleMapping } from "./types.ts";
 import { parseCssStyles } from "./utils/css.ts";
 import { decodeEntities } from "./utils/entities.ts";
+import { INVISIBLE } from "./utils/text.ts";
 
 const FRONT_MATTER_TITLE =
 	/^(cover|title\s*page|titlepage|half[\s-]?title|copyright|imprint|colophon|contents|table of contents|toc|dedication|epigraph|acknowledge?ments?|about the author|about the publisher|advance praise|praise for|also by|by the same author|other books by|front\s?matter|newsletter)\b/i;
@@ -22,6 +23,13 @@ const BODY_MIN_WORDS = 150;
 const MAX_FRONT_MATTER_SHARE = 0.25;
 
 const MIN_FRONT_MATTER_SCAN = 6;
+
+function cleanTitle(title: string): string {
+	return decodeEntities(title)
+		.replace(INVISIBLE, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}
 
 function chapterWordCount(chapter: ParsedChapter): number {
 	let words = 0;
@@ -94,8 +102,8 @@ export async function parseEpubFromZip(
 	}
 	const opf = parseOpf(opfXml, opfRel);
 
-	const bookTitle = opf.title;
-	const bookAuthor = opf.author;
+	const title = cleanTitle(opf.title);
+	const author = cleanTitle(opf.author);
 
 	const coverItem = opf.manifest.get(opf.coverId);
 	const coverImage = coverItem
@@ -161,7 +169,7 @@ export async function parseEpubFromZip(
 		const index = chapters.length;
 		chapters.push({
 			index,
-			title: decodeEntities(titleMap.get(doc.href) ?? ""),
+			title: cleanTitle(titleMap.get(doc.href) ?? ""),
 			blocks: materializeBlocks(cleaned[i], index, `c${index}-`, (src) =>
 				resolveImage(src, doc.path),
 			),
@@ -169,11 +177,11 @@ export async function parseEpubFromZip(
 		});
 	});
 
-	markFrontMatter(chapters, decodeEntities(bookTitle));
+	markFrontMatter(chapters, title);
 
 	return {
-		title: decodeEntities(bookTitle),
-		author: decodeEntities(bookAuthor),
+		title,
+		author,
 		chapters,
 		coverImage,
 	};

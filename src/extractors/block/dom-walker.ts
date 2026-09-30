@@ -7,6 +7,7 @@ import type {
 } from "../../types.ts";
 import { parseCssStyles } from "../../utils/css.ts";
 import { collapseRuns, LINE_BREAK, runsText } from "../../utils/runs.ts";
+import { INVISIBLE } from "../../utils/text.ts";
 import type { BlockExtractor, RawBlock } from "./types.ts";
 
 interface WalkNode {
@@ -36,8 +37,6 @@ const NODE_ELEMENT = 1;
 const NODE_TEXT = 3;
 
 const PRIVATE_USE = /\p{Co}/gu;
-
-const INVISIBLE = /[\u00AD\u200B-\u200D\uFEFF]/g;
 
 const LAYOUT_WHITESPACE = /[\n\r\t\f\v]/g;
 
