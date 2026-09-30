@@ -13,6 +13,8 @@ const ORNAMENT_REPEATS = 3;
 
 const WATERMARK = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
+const SECTION_NUMBER = /^([0-9]{1,3}|[IVXLC]{1,7})\.?$/;
+
 function imageKey(section: CleanupSection, src: string): Uint8Array | string {
 	return section.imageBytes(src) ?? src;
 }
@@ -66,6 +68,19 @@ export function cleanupSections(
 				(imageCounts.get(imageKey(section, block.src)) ?? 0) < ORNAMENT_REPEATS
 			);
 		});
-		return kept.filter((block) => block.type !== "text" || blockText(block));
+		const numbered = kept.map(
+			(block): RawBlock =>
+				block.type === "text" && SECTION_NUMBER.test(block.content)
+					? {
+							type: "heading",
+							level: 2,
+							content: block.content,
+							runs: block.runs,
+						}
+					: block,
+		);
+		return numbered.filter(
+			(block) => block.type !== "text" || blockText(block),
+		);
 	});
 }
