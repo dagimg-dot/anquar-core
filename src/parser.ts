@@ -86,14 +86,14 @@ export async function parseEpubFromFile(
 	options?: Partial<ParseOptions>,
 ): Promise<ParsedBook> {
 	const zip = await EpubZip.fromJSZip(await JSZip.loadAsync(file));
-	return parseEpubFromZip(zip, options as ParseOptions | undefined);
+	return parseEpubFromZip(zip, options);
 }
 
 export async function parseEpubFromZip(
 	zip: EpubZip,
-	opts?: ParseOptions,
+	opts?: Partial<ParseOptions>,
 ): Promise<ParsedBook> {
-	const options: ParseOptions = opts ?? DEFAULT_PARSE_OPTIONS;
+	const options: ParseOptions = { ...DEFAULT_PARSE_OPTIONS, ...opts };
 
 	const opfRel = getOpfPath(zip);
 	const opfXml = zip.readText(opfRel);
