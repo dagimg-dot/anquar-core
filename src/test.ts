@@ -555,6 +555,10 @@ async function run() {
 							`${name}: ch${ch.index} text block has content`,
 						);
 						assert(
+							runsText(b.runs) === b.content,
+							`${name}: ch${ch.index} text runs spell its content`,
+						);
+						assert(
 							b.charCount === b.content.length,
 							`${name}: ch${ch.index} text block charCount`,
 						);

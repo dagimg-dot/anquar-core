@@ -1,5 +1,5 @@
 import { blockText } from "./blocks.ts";
-import type { RawBlock } from "./extractors/block/types.ts";
+import type { RawBlock, RawTextBlock } from "./extractors/block/types.ts";
 import { imageSize } from "./utils/image-size.ts";
 
 export interface CleanupSection {
@@ -14,6 +14,8 @@ const ORNAMENT_REPEATS = 3;
 const WATERMARK = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 
 const SECTION_NUMBER = /^([0-9]{1,3}|[IVXLC]{1,7})\.?$/;
+
+const PARAGRAPH_END = /[.!?…:;"”’')\]—–-]$/;
 
 function imageKey(section: CleanupSection, src: string): Uint8Array | string {
 	return section.imageBytes(src) ?? src;
@@ -33,6 +35,50 @@ function dropDoubledPictures(section: CleanupSection): RawBlock[] {
 			imageKey(section, prev.src) === imageKey(section, block.src)
 		);
 	});
+}
+
+function rejoinPrintLines(blocks: RawBlock[]): RawBlock[] {
+	const lines = blocks.filter(
+		(b): b is RawTextBlock => b.type === "text" && b.content.length >= 25,
+	);
+	const unfinished = lines.filter((b) => !PARAGRAPH_END.test(b.content));
+	if (lines.length < 6 || unfinished.length < lines.length * 0.5) return blocks;
+
+	const continuedInLowercase = blocks.filter((block, i) => {
+		const prev = blocks[i - 1];
+		return (
+			block.type === "text" &&
+			prev?.type === "text" &&
+			!PARAGRAPH_END.test(prev.content) &&
+			/^\p{Ll}/u.test(block.content)
+		);
+	});
+	const readsAsVerse = continuedInLowercase.length < unfinished.length * 0.3;
+	if (readsAsVerse) return blocks;
+
+	const out: RawBlock[] = [];
+	for (const block of blocks) {
+		const prev = out[out.length - 1];
+		if (
+			block.type === "text" &&
+			prev?.type === "text" &&
+			!PARAGRAPH_END.test(prev.content) &&
+			!/^[—–―"“‘]/.test(block.content)
+		) {
+			out[out.length - 1] = {
+				type: "text",
+				content: `${prev.content} ${block.content}`,
+				runs: [
+					...prev.runs,
+					{ text: " ", bold: false, italic: false },
+					...block.runs,
+				],
+			};
+		} else {
+			out.push(block);
+		}
+	}
+	return out;
 }
 
 export function cleanupSections(
@@ -84,7 +130,7 @@ export function cleanupSections(
 						}
 					: block,
 		);
-		return numbered.filter(
+		return rejoinPrintLines(numbered).filter(
 			(block) => block.type !== "text" || blockText(block),
 		);
 	});
