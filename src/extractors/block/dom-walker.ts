@@ -29,6 +29,7 @@ interface DeferredList extends Style {
 interface InlineScan {
 	runs: StyleRun[];
 	lists: DeferredList[];
+	imageAlts: string[];
 }
 
 const NODE_ELEMENT = 1;
@@ -71,14 +72,6 @@ const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
 
 const TITLE_MAX_CHARS = 70;
 
-function readsAsTitle(runs: StyleRun[], text: string): boolean {
-	if (text.length < 2 || text.length > TITLE_MAX_CHARS) return false;
-	if (/[.!?;:,]$/.test(text)) return false;
-	if (!/[\p{L}\p{N}]/u.test(text)) return false;
-	if (!/^[\p{Lu}\p{N}"'“‘([]/u.test(text)) return false;
-	return runs.every((r) => r.bold || !r.text.trim());
-}
-
 const SKIP_TAGS = new Set([
 	"script",
 	"style",
@@ -87,6 +80,16 @@ const SKIP_TAGS = new Set([
 	"meta",
 	"link",
 ]);
+
+function readsAsTitle(runs: StyleRun[], text: string): boolean {
+	if (text.length < 2 || text.length > TITLE_MAX_CHARS) return false;
+	const endsLikeSentence = /[.!?;:,…]$/.test(text.replace(/["'”’»)\]]+$/u, ""));
+	if (endsLikeSentence) return false;
+	if (!/[\p{L}\p{N}]/u.test(text)) return false;
+	const opensLikeTitle = /^[\p{Lu}\p{N}"'“‘([]/u.test(text);
+	if (!opensLikeTitle) return false;
+	return runs.every((r) => r.bold || !r.text.trim());
+}
 
 function promoteTitles(blocks: RawBlock[], candidates: Set<number>): void {
 	for (const i of candidates) {
@@ -188,6 +191,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		const scanInline = (parent: WalkNode, inherited: Style): InlineScan => {
 			const collected: StyleRun[] = [];
 			const lists: DeferredList[] = [];
+			const imageAlts: string[] = [];
 
 			const visit = (n: WalkNode, style: Style) => {
 				if (n.nodeType === NODE_TEXT) {
@@ -198,7 +202,12 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				if (n.nodeType !== NODE_ELEMENT) return;
 
 				const tag = tagOf(n);
-				if (SKIP_TAGS.has(tag) || tag === "img") return;
+				if (SKIP_TAGS.has(tag)) return;
+				if (tag === "img") {
+					const alt = readable(n.getAttribute?.("alt")).trim();
+					if (alt) imageAlts.push(alt);
+					return;
+				}
 				if (LIST_TAGS.has(tag)) {
 					lists.push({ node: n, ...computeStyle(n, style) });
 					return;
@@ -213,7 +222,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			};
 
 			for (const c of parent.childNodes ?? []) visit(c, inherited);
-			return { runs: collapseRuns(collected), lists };
+			return { runs: collapseRuns(collected), lists, imageAlts };
 		};
 
 		const gatherItems = (
@@ -276,7 +285,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				blocks.push({
 					type: "image",
 					src: n.getAttribute?.("src") || "",
-					alt: n.getAttribute?.("alt") || "",
+					alt: readable(n.getAttribute?.("alt")).trim(),
 				});
 				return;
 			}
@@ -286,10 +295,16 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			const level = HEADING_LEVELS.get(tag);
 			if (level !== undefined) {
 				flush();
-				const { runs: headingRuns } = scanInline(n, style);
-				const content = runsText(headingRuns);
-				if (content)
+				const scan = scanInline(n, style);
+				let content = runsText(scan.runs);
+				let headingRuns = scan.runs;
+				if (!content && scan.imageAlts.length > 0) {
+					content = scan.imageAlts.join(" ");
+					headingRuns = [{ text: content, ...style }];
+				}
+				if (content) {
 					blocks.push({ type: "heading", level, content, runs: headingRuns });
+				}
 				return;
 			}
 

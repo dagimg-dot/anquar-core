@@ -182,6 +182,20 @@ async function run() {
 			"heading keeps inline styling as runs",
 		);
 
+		const [pictured] = extract('<h1><img src="c1.jpg" alt="Chapter 1"/></h1>');
+		assert(
+			pictured?.type === "heading" && pictured.content === "Chapter 1",
+			"a heading set as a picture reads its alt text",
+		);
+
+		const promoted = extract(
+			"<p><b>“What’s two plus two?”</b></p><p>Something irritates me.</p>",
+		);
+		assert(
+			promoted[0]?.type === "text",
+			"a bold line ending in a quoted question is dialogue, not a title",
+		);
+
 		const [ordered] = extract("<ol><li>a</li><li>b</li></ol>");
 		assert(
 			ordered?.type === "list" && ordered.ordered && ordered.items.length === 2,
