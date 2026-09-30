@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { materializeBlocks } from "./blocks.ts";
 import { chunkBlocks, chunkBook } from "./chunker.ts";
+import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { parseEpub } from "./node.ts";
@@ -358,6 +359,15 @@ async function run() {
 			glued?.type === "text" && glued.content === "They felt understood. And",
 			"a numbered link glued to the sentence before it is a footnote marker",
 		);
+	}
+
+	title("package document");
+	{
+		const opf = parseOpf(
+			'<package><metadata><dc:title>T</dc:title></metadata><manifest><item id="art" href="c.jpg" media-type="image/jpeg" properties="cover-image"/></manifest></package>',
+			"OEBPS/content.opf",
+		);
+		assert(opf.coverId === "art", "an EPUB 3 cover-image item is the cover");
 	}
 
 	title("chunking structured blocks");

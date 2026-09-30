@@ -13,6 +13,13 @@ export interface ParsedOpf {
 	spine: { idref: string }[];
 	title: string;
 	author: string;
+	coverId: string;
+}
+
+const TRAILING_LIST_SEPARATOR = /[;,]\s*$/;
+
+function localName(el: Element): string {
+	return (el.tagName || "").toLowerCase().replace(/^.*:/, "");
 }
 
 export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
@@ -26,28 +33,62 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 	try {
 		doc = parseHTML(opfXml).document;
 	} catch {
-		return { opfDir, manifest, spine, title: "Unknown", author: "Unknown" };
+		return {
+			opfDir,
+			manifest,
+			spine,
+			title: "Unknown",
+			author: "Unknown",
+			coverId: "",
+		};
 	}
 
 	const titles: { id: string; text: string }[] = [];
 	let mainTitleId = "";
 	let author = "Unknown";
+	let coverId = "";
 
 	for (const el of doc.querySelectorAll("*")) {
-		const tag = (el.tagName || "").toLowerCase();
+		const tag = localName(el);
 		const text = (el.textContent || "").trim();
 
-		if (tag === "dc:title" || tag.endsWith(":title")) {
-			if (text) titles.push({ id: el.getAttribute("id") ?? "", text });
-		} else if (tag === "dc:creator" || tag.endsWith(":creator")) {
-			if (text && author === "Unknown") author = text.replace(/[;,]\s*$/, "");
-		} else if (tag === "meta" || tag.endsWith(":meta")) {
-			if (
-				el.getAttribute("property") === "title-type" &&
-				text === "main" &&
-				!mainTitleId
-			) {
-				mainTitleId = (el.getAttribute("refines") ?? "").replace(/^#/, "");
+		switch (tag) {
+			case "title":
+				if (text) titles.push({ id: el.getAttribute("id") ?? "", text });
+				break;
+			case "creator":
+				if (text && author === "Unknown")
+					author = text.replace(TRAILING_LIST_SEPARATOR, "");
+				break;
+			case "meta":
+				if (
+					el.getAttribute("property") === "title-type" &&
+					text === "main" &&
+					!mainTitleId
+				) {
+					mainTitleId = (el.getAttribute("refines") ?? "").replace(/^#/, "");
+				}
+				if (el.getAttribute("name")?.toLowerCase() === "cover" && !coverId) {
+					coverId = el.getAttribute("content") ?? "";
+				}
+				break;
+			case "item": {
+				const id = el.getAttribute("id");
+				const href = el.getAttribute("href");
+				if (id && href) {
+					manifest.set(id, {
+						id,
+						href,
+						mediaType: el.getAttribute("media-type") || "",
+						properties: el.getAttribute("properties") || "",
+					});
+				}
+				break;
+			}
+			case "itemref": {
+				const idref = el.getAttribute("idref");
+				if (idref) spine.push({ idref });
+				break;
 			}
 		}
 	}
@@ -57,26 +98,12 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 		titles[0]?.text ??
 		"Unknown";
 
-	for (const el of doc.querySelectorAll("*")) {
-		const tag = (el.tagName || "").toLowerCase();
-		if (tag === "item" || tag.endsWith(":item")) {
-			const id = el.getAttribute("id");
-			const href = el.getAttribute("href");
-			const mediaType = el.getAttribute("media-type") || "";
-			const properties = el.getAttribute("properties") || "";
-			if (id && href) {
-				manifest.set(id, { id, href, mediaType, properties });
-			}
-		}
+	if (!manifest.has(coverId)) {
+		coverId =
+			[...manifest.values()].find((item) =>
+				item.properties.split(/\s+/).includes("cover-image"),
+			)?.id ?? "";
 	}
 
-	for (const el of doc.querySelectorAll("*")) {
-		const tag = (el.tagName || "").toLowerCase();
-		if (tag === "itemref" || tag.endsWith(":itemref")) {
-			const idref = el.getAttribute("idref");
-			if (idref) spine.push({ idref });
-		}
-	}
-
-	return { opfDir, manifest, spine, title, author };
+	return { opfDir, manifest, spine, title, author, coverId };
 }

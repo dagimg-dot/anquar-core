@@ -1,4 +1,3 @@
-import { parseHTML } from "linkedom";
 import { blockText, materializeBlocks } from "./blocks.ts";
 import { cleanupSections } from "./cleanup.ts";
 import type { ParseOptions } from "./config.ts";
@@ -98,27 +97,10 @@ export async function parseEpubFromZip(
 	const bookTitle = opf.title;
 	const bookAuthor = opf.author;
 
-	let coverImage: Uint8Array | null = null;
-	try {
-		const { document: metaDoc } = parseHTML(opfXml);
-		for (const el of metaDoc.querySelectorAll("*")) {
-			const tag = (el.tagName || "").toLowerCase();
-			if (
-				(tag === "meta" || tag.endsWith(":meta")) &&
-				el.getAttribute?.("name")?.toLowerCase() === "cover"
-			) {
-				const coverId = el.getAttribute("content");
-				if (coverId) {
-					const coverItem = opf.manifest.get(coverId);
-					if (coverItem) {
-						const coverPath = zip.resolvePath(opf.opfDir, coverItem.href);
-						coverImage = zip.readBinary(coverPath);
-					}
-				}
-				break;
-			}
-		}
-	} catch {}
+	const coverItem = opf.manifest.get(opf.coverId);
+	const coverImage = coverItem
+		? zip.readBinary(zip.resolvePath(opf.opfDir, coverItem.href))
+		: null;
 
 	const docs: { href: string; path: string; html: string }[] = [];
 	for (const { idref } of opf.spine) {
