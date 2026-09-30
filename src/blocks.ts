@@ -13,7 +13,7 @@ export function listCharCount(items: ListItem[]): number {
 	return items.reduce((sum, item) => sum + item.content.length, 0);
 }
 
-export function blockText(block: Block): string {
+export function blockText(block: Block | RawBlock): string {
 	switch (block.type) {
 		case "text":
 		case "heading":

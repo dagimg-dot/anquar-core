@@ -1,5 +1,6 @@
 import { parseHTML } from "linkedom";
 import { blockText, materializeBlocks } from "./blocks.ts";
+import { cleanupSections } from "./cleanup.ts";
 import type { ParseOptions } from "./config.ts";
 import { DEFAULT_PARSE_OPTIONS } from "./config.ts";
 import { getOpfPath } from "./epub/container.ts";
@@ -119,38 +120,29 @@ export async function parseEpubFromZip(
 		}
 	} catch {}
 
-	const xhtmlFiles = new Map<string, string>();
-	const spineMap: { href: string; itemId: string }[] = [];
-
-	for (const sp of opf.spine) {
-		const item = opf.manifest.get(sp.idref);
-		if (!item) continue;
-		if (!item.mediaType.includes("xhtml") && !item.mediaType.includes("html"))
-			continue;
-
-		const xhtmlPath = zip.resolvePath(opf.opfDir, item.href);
-		const html = zip.readText(xhtmlPath);
-		if (!html) continue;
-
-		xhtmlFiles.set(item.href, html);
-		spineMap.push({ href: xhtmlPath, itemId: sp.idref });
+	const docs: { href: string; path: string; html: string }[] = [];
+	for (const { idref } of opf.spine) {
+		const item = opf.manifest.get(idref);
+		if (!item?.mediaType.includes("html")) continue;
+		const path = zip.resolvePath(opf.opfDir, item.href);
+		const html = zip.readText(path);
+		if (html) docs.push({ href: item.href, path, html });
 	}
 
 	const cssMap = new Map<string, StyleMapping>();
 	for (const item of opf.manifest.values()) {
-		if (item.mediaType === "text/css") {
-			const cssPath = zip.resolvePath(opf.opfDir, item.href);
-			const css = zip.readText(cssPath);
-			if (css) {
-				const parsed = parseCssStyles(css);
-				for (const [k, v] of parsed) {
-					if (!cssMap.has(k)) cssMap.set(k, v);
-				}
-			}
+		if (item.mediaType !== "text/css") continue;
+		const css = zip.readText(zip.resolvePath(opf.opfDir, item.href));
+		for (const [k, v] of parseCssStyles(css)) {
+			if (!cssMap.has(k)) cssMap.set(k, v);
 		}
 	}
 
-	const titleParams: TitleExtractorParams = { zip, opf, xhtmlFiles };
+	const titleParams: TitleExtractorParams = {
+		zip,
+		opf,
+		xhtmlFiles: new Map(docs.map((d) => [d.href, d.html])),
+	};
 	const titleMap = await options.titleExtractor.extract(titleParams);
 
 	if (options.debug) {
@@ -160,47 +152,40 @@ export async function parseEpubFromZip(
 		}
 	}
 
+	const imageCache = new Map<string, Uint8Array | null>();
+	const resolveImage = (src: string, xhtmlPath: string) => {
+		const key = `${xhtmlPath}\n${src}`;
+		if (!imageCache.has(key)) {
+			const data = options.imageResolver.resolve({ zip, opf, src, xhtmlPath });
+			if (options.debug && !data) {
+				console.error(`[image] ${options.imageResolver.name} failed: ${src}`);
+			}
+			imageCache.set(key, data);
+		}
+		return imageCache.get(key) ?? null;
+	};
+
+	const cleaned = cleanupSections(
+		docs.map((doc) => ({
+			blocks: options.blockExtractor.extract(doc.html, cssMap),
+			imageBytes: (src: string) => resolveImage(src, doc.path),
+		})),
+		coverImage,
+	);
+
 	const chapters: ParsedChapter[] = [];
-	let chapterIndex = 0;
-
-	for (const { href: xhtmlPath, itemId } of spineMap) {
-		const item = opf.manifest.get(itemId);
-		if (!item) continue;
-
-		const html = zip.readText(xhtmlPath);
-		if (!html) continue;
-
-		const rawBlocks = options.blockExtractor.extract(html, cssMap);
-		if (rawBlocks.length === 0) continue;
-
-		const chapterTitle = decodeEntities(titleMap.get(item.href) ?? "");
-
-		const blocks = materializeBlocks(
-			rawBlocks,
-			chapterIndex,
-			`c${chapterIndex}-`,
-			(src) => {
-				const data = options.imageResolver.resolve({
-					zip,
-					opf,
-					src,
-					xhtmlPath,
-				});
-				if (options.debug && !data) {
-					console.error(`[image] ${options.imageResolver.name} failed: ${src}`);
-				}
-				return data;
-			},
-		);
-
+	docs.forEach((doc, i) => {
+		if (cleaned[i].length === 0) return;
+		const index = chapters.length;
 		chapters.push({
-			index: chapterIndex,
-			title: chapterTitle,
-			blocks,
+			index,
+			title: decodeEntities(titleMap.get(doc.href) ?? ""),
+			blocks: materializeBlocks(cleaned[i], index, `c${index}-`, (src) =>
+				resolveImage(src, doc.path),
+			),
 			frontMatter: false,
 		});
-		chapterIndex++;
-	}
+	});
 
 	markFrontMatter(chapters, decodeEntities(bookTitle));
 
