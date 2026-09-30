@@ -67,9 +67,20 @@ const BLOCK_TAGS = new Set([
 	"blockquote",
 	"li",
 	"section",
+	"article",
+	"aside",
+	"header",
+	"footer",
+	"main",
 	"figure",
+	"figcaption",
+	"caption",
 	"tr",
+	"dt",
+	"dd",
 	"pre",
+	"address",
+	"center",
 ]);
 
 const CELL_SEPARATOR = " · ";

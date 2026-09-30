@@ -316,6 +316,17 @@ async function run() {
 			"an empty cell leaves no divider behind",
 		);
 
+		const listed = extract(
+			"<dl><dt>Azoth</dt><dd>The perfect woman</dd></dl><aside>Six daughters</aside><aside>One body</aside>",
+		);
+		assert(
+			same(
+				listed.map((b) => (b.type === "text" ? b.content : b.type)),
+				["Azoth", "The perfect woman", "Six daughters", "One body"],
+			),
+			"definition terms and asides end their own blocks",
+		);
+
 		const [noted] = extract(
 			'<p>In the footnote.<a epub:type="noteref" href="notes.xhtml#n1">fn1</a> The test<sup><a href="#r2">2</a></sup> ran.</p>',
 		);
