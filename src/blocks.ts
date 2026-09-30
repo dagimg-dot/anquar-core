@@ -54,6 +54,7 @@ function toBlock(
 				...common,
 				type: "list",
 				ordered: raw.ordered,
+				start: raw.start ?? 1,
 				items: raw.items,
 				charCount: listCharCount(raw.items),
 			};

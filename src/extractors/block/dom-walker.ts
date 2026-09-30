@@ -386,8 +386,14 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				flush();
 				const items: ListItem[] = [];
 				gatherItems(n, style, 0, items);
+				const start = Number.parseInt(n.getAttribute?.("start") ?? "", 10);
 				if (items.length > 0)
-					blocks.push({ type: "list", ordered: tag === "ol", items });
+					blocks.push({
+						type: "list",
+						ordered: tag === "ol",
+						start: Number.isFinite(start) ? start : 1,
+						items,
+					});
 				return;
 			}
 

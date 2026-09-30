@@ -21,6 +21,7 @@ export interface RawHeadingBlock {
 export interface RawListBlock {
 	type: "list";
 	ordered: boolean;
+	start?: number;
 	items: ListItem[];
 }
 

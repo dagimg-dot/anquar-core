@@ -41,6 +41,7 @@ export interface ListItem {
 export interface ListBlock extends BlockBase {
 	type: "list";
 	ordered: boolean;
+	start: number;
 	items: ListItem[];
 }
 

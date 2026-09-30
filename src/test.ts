@@ -219,10 +219,13 @@ async function run() {
 			"a bold line ending in a quoted question is dialogue, not a title",
 		);
 
-		const [ordered] = extract("<ol><li>a</li><li>b</li></ol>");
+		const [ordered] = extract('<ol start="4"><li>a</li><li>b</li></ol>');
 		assert(
-			ordered?.type === "list" && ordered.ordered && ordered.items.length === 2,
-			"ol becomes an ordered list of its items",
+			ordered?.type === "list" &&
+				ordered.ordered &&
+				ordered.items.length === 2 &&
+				ordered.start === 4,
+			"ol becomes an ordered list that keeps its start number",
 		);
 
 		const [bulleted] = extract("<ul><li>a</li></ul>");
