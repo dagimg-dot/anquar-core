@@ -4,6 +4,7 @@ export interface OpfItem {
 	id: string;
 	href: string;
 	mediaType: string;
+	properties: string;
 }
 
 export interface ParsedOpf {
@@ -62,8 +63,9 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 			const id = el.getAttribute("id");
 			const href = el.getAttribute("href");
 			const mediaType = el.getAttribute("media-type") || "";
+			const properties = el.getAttribute("properties") || "";
 			if (id && href) {
-				manifest.set(id, { id, href, mediaType });
+				manifest.set(id, { id, href, mediaType, properties });
 			}
 		}
 	}

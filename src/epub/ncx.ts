@@ -1,14 +1,20 @@
 import { parseHTML } from "linkedom";
 import { decodeEntities } from "../utils/entities.ts";
 
-export function parseNcx(ncxXml: string): Map<string, string> {
-	const titles = new Map<string, string>();
+export interface NcxEntry {
+	title: string;
+	href: string;
+	fragment: string;
+}
+
+export function parseNcx(ncxXml: string): NcxEntry[] {
+	const entries: NcxEntry[] = [];
 
 	let doc: ReturnType<typeof parseHTML>["document"];
 	try {
 		doc = parseHTML(ncxXml).document;
 	} catch {
-		return titles;
+		return entries;
 	}
 
 	for (const el of doc.querySelectorAll("*")) {
@@ -20,14 +26,14 @@ export function parseNcx(ncxXml: string): Map<string, string> {
 			if (!textEl || !contentEl) continue;
 
 			const title = decodeEntities((textEl.textContent || "").trim());
-			const href = (contentEl.getAttribute("src") || "").split("#")[0];
-			if (title && href && !titles.has(href)) {
-				titles.set(href, title);
-			}
+			const [href, fragment = ""] = (contentEl.getAttribute("src") || "").split(
+				"#",
+			);
+			if (title && href) entries.push({ title, href, fragment });
 		}
 	}
 
-	return titles;
+	return entries;
 }
 
 function findChild(parent: Element, localName: string): Element | null {

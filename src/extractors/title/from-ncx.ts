@@ -1,5 +1,6 @@
 import { parseNcx } from "../../epub/ncx.ts";
 import { normalizeTitleKey } from "../../utils/path.ts";
+import { atTopOfFile } from "./anchors.ts";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
 function findNcxPath(params: TitleExtractorParams): string | null {
@@ -26,15 +27,14 @@ export class NcxTitleExtractor implements TitleExtractor {
 		const ncxXml = params.zip.readText(ncxPath);
 		if (!ncxXml) return titles;
 
-		const ncxTitles = parseNcx(ncxXml);
 		const ncxDir = params.zip.dirname(ncxPath);
 
-		for (const [href, title] of ncxTitles) {
+		for (const { title, href, fragment } of parseNcx(ncxXml)) {
 			const resolved = ncxDir ? params.zip.resolvePath(ncxDir, href) : href;
 			const key = normalizeTitleKey(params.opf.opfDir, resolved);
-			if (!titles.has(key)) {
-				titles.set(key, title);
-			}
+			if (titles.has(key)) continue;
+			if (!atTopOfFile(params.xhtmlFiles.get(key), fragment)) continue;
+			titles.set(key, title);
 		}
 
 		return titles;

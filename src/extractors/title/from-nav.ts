@@ -1,5 +1,7 @@
 import { parseHTML } from "linkedom";
+import { findNavPath } from "../../epub/semantics.ts";
 import { normalizeTitleKey } from "../../utils/path.ts";
+import { atTopOfFile } from "./anchors.ts";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
 export class NavTitleExtractor implements TitleExtractor {
@@ -8,7 +10,7 @@ export class NavTitleExtractor implements TitleExtractor {
 	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
 		const titles = new Map<string, string>();
 
-		const navPath = this.findNavPath(params);
+		const navPath = findNavPath(params.zip, params.opf);
 		if (!navPath) return titles;
 
 		const navHtml = params.zip.readText(navPath);
@@ -41,38 +43,15 @@ export class NavTitleExtractor implements TitleExtractor {
 			const text = (link.textContent || "").trim();
 			if (!href || !text) continue;
 
-			const base = href.split("#")[0];
+			const [base, fragment = ""] = href.split("#");
 			const resolved = navDir ? params.zip.resolvePath(navDir, base) : base;
 			const key = normalizeTitleKey(params.opf.opfDir, resolved);
 
-			if (!titles.has(key)) {
-				titles.set(key, text);
-			}
+			if (titles.has(key)) continue;
+			if (!atTopOfFile(params.xhtmlFiles.get(key), fragment)) continue;
+			titles.set(key, text);
 		}
 
 		return titles;
-	}
-
-	private findNavPath(params: TitleExtractorParams): string | null {
-		for (const item of params.opf.manifest.values()) {
-			if (
-				item.mediaType === "application/xhtml+xml" &&
-				(item.id.toLowerCase().includes("nav") ||
-					item.href.toLowerCase().includes("nav"))
-			) {
-				return params.zip.resolvePath(params.opf.opfDir, item.href);
-			}
-		}
-
-		for (const guess of [
-			"nav.xhtml",
-			"OEBPS/nav.xhtml",
-			"OPS/nav.xhtml",
-			`${params.opf.opfDir}nav.xhtml`,
-		]) {
-			if (params.zip.has(guess)) return guess;
-		}
-
-		return null;
 	}
 }
