@@ -6,7 +6,7 @@ import type {
 	StyleRun,
 } from "../../types.ts";
 import { parseCssStyles } from "../../utils/css.ts";
-import { collapseRuns, normalizeRuns, runsText } from "../../utils/runs.ts";
+import { collapseRuns, LINE_BREAK, runsText } from "../../utils/runs.ts";
 import type { BlockExtractor, RawBlock } from "./types.ts";
 
 interface WalkNode {
@@ -39,8 +39,13 @@ const PRIVATE_USE = /\p{Co}/gu;
 
 const INVISIBLE = /[\u00AD\u200B-\u200D\uFEFF]/g;
 
+const LAYOUT_WHITESPACE = /[\n\r\t\f\v]/g;
+
 function readable(raw: string | null | undefined): string {
-	return (raw ?? "").replace(PRIVATE_USE, "").replace(INVISIBLE, "");
+	return (raw ?? "")
+		.replace(PRIVATE_USE, "")
+		.replace(INVISIBLE, "")
+		.replace(LAYOUT_WHITESPACE, " ");
 }
 
 const BOLD_TAGS = new Set(["b", "strong"]);
@@ -72,6 +77,8 @@ const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
 
 const TITLE_MAX_CHARS = 70;
 
+const SCENE_BREAK_ORNAMENT = /^[\s*•·⁂◆◇❖✦✧★☆~#§=_–—-]{1,24}$/u;
+
 const SKIP_TAGS = new Set([
 	"script",
 	"style",
@@ -79,6 +86,7 @@ const SKIP_TAGS = new Set([
 	"title",
 	"meta",
 	"link",
+	"head",
 ]);
 
 function readsAsTitle(runs: StyleRun[], text: string): boolean {
@@ -95,12 +103,16 @@ function promoteTitles(blocks: RawBlock[], candidates: Set<number>): void {
 	for (const i of candidates) {
 		const next = blocks[i + 1];
 		if (next?.type !== "text" || candidates.has(i + 1)) continue;
-		if (!/^[\p{Lu}\p{N}"'“‘]/u.test(next.content.trim())) continue;
+		if (!/^[\p{Lu}\p{N}"'“‘]/u.test(next.content)) continue;
 
 		const block = blocks[i];
 		if (block.type !== "text") continue;
-		const runs = collapseRuns(block.runs);
-		blocks[i] = { type: "heading", level: 2, content: runsText(runs), runs };
+		blocks[i] = {
+			type: "heading",
+			level: 2,
+			content: block.content,
+			runs: block.runs,
+		};
 	}
 }
 
@@ -133,19 +145,25 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		let pendingTag = "";
 		const titleCandidates = new Set<number>();
 
+		const pushBreak = () => {
+			const last = blocks[blocks.length - 1];
+			if (last && last.type !== "break") blocks.push({ type: "break" });
+		};
+
 		const flush = () => {
 			if (runs.length === 0) return;
-			const norm = normalizeRuns(runs);
-			const content = runsText(norm);
-			if (content.trim()) {
-				const collapsed = collapseRuns(norm);
+			const collapsed = collapseRuns(runs);
+			const content = runsText(collapsed);
+			if (SCENE_BREAK_ORNAMENT.test(content)) {
+				pushBreak();
+			} else if (content) {
 				if (
 					TITLE_HOST_TAGS.has(pendingTag) &&
-					readsAsTitle(collapsed, runsText(collapsed))
+					readsAsTitle(collapsed, content)
 				) {
 					titleCandidates.add(blocks.length);
 				}
-				blocks.push({ type: "text", content, runs: norm });
+				blocks.push({ type: "text", content, runs: collapsed });
 			}
 			runs.length = 0;
 			pendingTag = "";
@@ -213,7 +231,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 					return;
 				}
 				if (tag === "br") {
-					collected.push({ text: " ", ...style });
+					collected.push({ text: LINE_BREAK, ...style });
 					return;
 				}
 
@@ -257,10 +275,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (!n) return;
 
 			if (n.nodeType === NODE_TEXT) {
-				const raw = readable(n.textContent);
-				if (!raw.length) return;
-				const t = /^\s+$/.test(raw) ? " " : raw;
-				runs.push({ text: t, ...inherited });
+				const text = readable(n.textContent);
+				if (text) runs.push({ text, ...inherited });
 				return;
 			}
 
@@ -270,13 +286,13 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (SKIP_TAGS.has(tag)) return;
 
 			if (tag === "br") {
-				if (runs.length > 0)
-					runs.push({ text: " ", bold: false, italic: false });
+				runs.push({ text: LINE_BREAK, ...inherited });
 				return;
 			}
 
 			if (tag === "hr") {
 				flush();
+				pushBreak();
 				return;
 			}
 
@@ -334,6 +350,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		flush();
 		promoteTitles(blocks, titleCandidates);
 
+		while (blocks[blocks.length - 1]?.type === "break") blocks.pop();
 		return blocks;
 	}
 }

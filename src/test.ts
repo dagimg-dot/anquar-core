@@ -11,6 +11,7 @@ import { parseEpub } from "./node.ts";
 import { hardSplit, splitSentences } from "./sentences.ts";
 import type { Block, ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
+import { collapseRuns, LINE_BREAK, runsText } from "./utils/runs.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -146,6 +147,28 @@ async function run() {
 		assert(r.join("") === "abcdefghijklmnop", "no data loss");
 	}
 
+	title("collapseRuns");
+	{
+		const plain = { bold: false, italic: false };
+		const lines = collapseRuns([
+			{ text: `  roses are red,${LINE_BREAK}`, ...plain },
+			{ text: `  violets${LINE_BREAK}${LINE_BREAK} are blue  `, ...plain },
+		]);
+		assert(
+			runsText(lines) === "roses are red,\nviolets\nare blue",
+			"a <br> survives as one newline, with no space on either side",
+		);
+		const source = collapseRuns([{ text: "one\n  two", ...plain }]);
+		assert(
+			runsText(collapseRuns(source)) === runsText(source),
+			"collapsing twice changes nothing",
+		);
+		const edges = collapseRuns([
+			{ text: `${LINE_BREAK} text ${LINE_BREAK}`, ...plain },
+		]);
+		assert(runsText(edges) === "text", "breaks at either end are dropped");
+	}
+
 	title("headings & lists");
 	{
 		const extract = (html: string): Block[] =>
@@ -243,6 +266,42 @@ async function run() {
 		assert(
 			separated.map((b) => b.type).join(",") === "text,heading,text",
 			"a heading breaks the surrounding paragraph flow",
+		);
+	}
+
+	title("paragraph structure");
+	{
+		const extract = (html: string): Block[] =>
+			materializeBlocks(
+				new DomWalkerBlockExtractor().extract(
+					`<html><body>${html}</body></html>`,
+				),
+				0,
+				"t-",
+				() => null,
+			);
+
+		const [verse] = extract(
+			"<p>Tyger Tyger, burning bright,<br/>In the forests</p>",
+		);
+		assert(
+			verse?.type === "text" &&
+				verse.content === "Tyger Tyger, burning bright,\nIn the forests",
+			"a <br> inside a paragraph becomes a line break",
+		);
+
+		const [indented] = extract("<p>one\n    two</p>");
+		assert(
+			indented?.type === "text" && indented.content === "one two",
+			"newlines in the markup are only spaces",
+		);
+
+		const scenes = extract(
+			"<p>One.</p><hr/><p>Two.</p><p>* * *</p><p>Three.</p>",
+		);
+		assert(
+			scenes.map((b) => b.type).join(",") === "text,break,text,break,text",
+			"rules and ornament lines become scene breaks",
 		);
 	}
 

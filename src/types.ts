@@ -18,6 +18,7 @@ interface BlockBase {
 
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
+/** Line breaks the source set with <br> arrive as "\n": render with pre-line wrapping. */
 export interface TextBlock extends BlockBase {
 	type: "text";
 	content: string;
@@ -50,7 +51,16 @@ export interface ImageBlock extends BlockBase {
 	data: Uint8Array | null;
 }
 
-export type Block = TextBlock | HeadingBlock | ListBlock | ImageBlock;
+export interface SceneBreakBlock extends BlockBase {
+	type: "break";
+}
+
+export type Block =
+	| TextBlock
+	| HeadingBlock
+	| ListBlock
+	| ImageBlock
+	| SceneBreakBlock;
 
 export type ProseBlock = TextBlock | HeadingBlock;
 

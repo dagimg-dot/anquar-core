@@ -30,11 +30,16 @@ export interface RawImageBlock {
 	alt: string;
 }
 
+export interface RawSceneBreakBlock {
+	type: "break";
+}
+
 export type RawBlock =
 	| RawTextBlock
 	| RawHeadingBlock
 	| RawListBlock
-	| RawImageBlock;
+	| RawImageBlock
+	| RawSceneBreakBlock;
 
 export interface BlockExtractor {
 	readonly name: string;

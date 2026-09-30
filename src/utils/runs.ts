@@ -1,5 +1,7 @@
 import type { StyleRun } from "../types.ts";
 
+export const LINE_BREAK = "\u2028";
+
 export function normalizeRuns(runs: StyleRun[]): StyleRun[] {
 	if (runs.length <= 1) return runs.map((r) => ({ ...r }));
 	const out: StyleRun[] = [];
@@ -21,26 +23,33 @@ export function runsText(runs: StyleRun[]): string {
 }
 
 export function collapseRuns(runs: StyleRun[]): StyleRun[] {
-	const out: StyleRun[] = [];
-	let atBoundary = true;
+	const chars: { ch: string; style: StyleRun }[] = [];
+	const tail = () => chars[chars.length - 1]?.ch;
 
 	for (const run of runs) {
-		let text = run.text.replace(/\s+/g, " ");
-		if (atBoundary && text.startsWith(" ")) text = text.slice(1);
-		if (!text) continue;
-		atBoundary = text.endsWith(" ");
-		out.push({ ...run, text });
-	}
-
-	while (out.length > 0) {
-		const last = out[out.length - 1];
-		const trimmed = last.text.replace(/\s+$/, "");
-		if (trimmed) {
-			last.text = trimmed;
-			break;
+		for (const ch of run.text) {
+			if (ch === LINE_BREAK || ch === "\n") {
+				if (tail() === " ") chars.pop();
+				if (chars.length === 0 || tail() === "\n") continue;
+				chars.push({ ch: "\n", style: run });
+			} else if (/\s/.test(ch)) {
+				if (chars.length === 0 || tail() === " " || tail() === "\n") continue;
+				chars.push({ ch: " ", style: run });
+			} else {
+				chars.push({ ch, style: run });
+			}
 		}
-		out.pop();
 	}
+	while (tail() === " " || tail() === "\n") chars.pop();
 
-	return normalizeRuns(out);
+	const out: StyleRun[] = [];
+	for (const { ch, style } of chars) {
+		const last = out[out.length - 1];
+		if (last && last.bold === style.bold && last.italic === style.italic) {
+			last.text += ch;
+		} else {
+			out.push({ text: ch, bold: style.bold, italic: style.italic });
+		}
+	}
+	return out;
 }

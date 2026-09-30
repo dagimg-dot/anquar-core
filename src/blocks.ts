@@ -21,6 +21,7 @@ export function blockText(block: Block): string {
 		case "list":
 			return block.items.map((item) => item.content).join(" ");
 		case "image":
+		case "break":
 			return "";
 	}
 }
@@ -65,6 +66,8 @@ function toBlock(
 				data: resolveImageData(raw.src),
 				charCount: 0,
 			};
+		case "break":
+			return { ...common, type: "break", charCount: 0 };
 	}
 }
 
