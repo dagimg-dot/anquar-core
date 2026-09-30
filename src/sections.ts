@@ -166,6 +166,11 @@ const ATTRIBUTION = /^[—–―]\s*\p{Lu}/u;
 
 const QUOTE_THEN_SOURCE = /["”’'»][\s.,]*[—–―-]?\s*\p{Lu}[^.!?"”]{1,80}$/u;
 
+const PAGE_REFERENCE =
+	/(^|[\s,(])(\d{1,4}([–-]\d{1,4})?|\d{1,2}\.\d{1,2})[,.;)]?$/;
+
+const SUBENTRY = /^[–—-]/;
+
 const DEDICATION =
 	/^(for|to|in (loving )?memory|dedicated|this book is (dedicated|for))\b/i;
 
@@ -254,6 +259,42 @@ function looksLikeContents(lines: string[], otherTitles: string[]): boolean {
 	return lines.length >= 5 && paged.length >= lines.length * 0.5;
 }
 
+function initialLetter(line: string): string {
+	return line
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036F]/g, "")
+		.toLowerCase()
+		.replace(/^[^a-z]+/, "")
+		.charAt(0);
+}
+
+function inOrderShare(letters: string[]): number {
+	const tails: string[] = [];
+	for (const letter of letters) {
+		let lo = 0;
+		let hi = tails.length;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (tails[mid] <= letter) lo = mid + 1;
+			else hi = mid;
+		}
+		tails[lo] = letter;
+	}
+	return letters.length === 0 ? 0 : tails.length / letters.length;
+}
+
+function looksLikeIndex(lines: string[]): boolean {
+	if (lines.length < 30) return false;
+	const length = median(lines.map((l) => l.length));
+	const paged = lines.filter((l) => PAGE_REFERENCE.test(l)).length;
+	if (length <= 60 && paged >= lines.length * 0.5) return true;
+	const entries = lines
+		.filter((l) => !SUBENTRY.test(l))
+		.map(initialLetter)
+		.filter(Boolean);
+	return length <= 40 && inOrderShare(entries) >= 0.75;
+}
+
 function looksLikePraise(lines: string[]): boolean {
 	if (lines.length < 4) return false;
 	let quoted = 0;
@@ -329,6 +370,7 @@ function shapeFitsRole(
 		case "contents":
 			return words <= 6000 && median(lengths) <= 120;
 		case "index": {
+			if (words <= 10 || looksLikeIndex(lines)) return true;
 			const numbered = lines.filter((l) => /\d/.test(l)).length;
 			return numbered >= lines.length * 0.3 && median(lengths) <= 160;
 		}
@@ -412,6 +454,8 @@ export function classifySections(
 		if (looksLikeNotes(sections[i])) return "notes";
 		return null;
 	};
+	const backApparatus = (i: number): SectionRole | null =>
+		plainApparatus(i) ?? (looksLikeIndex(lines[i]) ? "index" : null);
 
 	let firstCore = -1;
 	for (let i = 0; i < sections.length && firstCore < 0; i++) {
@@ -421,11 +465,21 @@ export function classifySections(
 		roles[i] = plainApparatus(i) ?? (contents ? "contents" : null);
 		if (roles[i] === null) firstCore = i;
 	}
+	const untitledBody = (i: number) =>
+		!sections[i].title && (roles[i] === null || roles[i] === "body");
+	const listLike = (i: number) =>
+		words[i] < CORE_WORDS && median(lines[i].map((l) => l.length)) <= 60;
+	const partOfIndex = (i: number) =>
+		untitledBody(i) &&
+		(looksLikeIndex(lines[i]) ||
+			(listLike(i) && (roles[i - 1] === "index" || roles[i + 1] === "index")));
+
 	let lastCore = -1;
 	for (let i = sections.length - 1; i >= 0 && lastCore < 0; i--) {
+		if (partOfIndex(i)) roles[i] = "index";
 		if (roles[i] === "body") lastCore = i;
 		if (roles[i] !== null || words[i] < CORE_WORDS) continue;
-		roles[i] = plainApparatus(i);
+		roles[i] = backApparatus(i);
 		if (roles[i] === null) lastCore = i;
 	}
 	if (firstCore < 0 || lastCore < 0) {
@@ -441,7 +495,7 @@ export function classifySections(
 		const text = lines[i];
 		const untitled = !sections[i].title;
 
-		roles[i] = plainApparatus(i);
+		roles[i] = front ? plainApparatus(i) : backApparatus(i);
 		if (roles[i] !== null || !front) continue;
 		if (looksLikeContents(text, otherTitles(i))) roles[i] = "contents";
 		else if (!untitled) continue;
@@ -454,6 +508,10 @@ export function classifySections(
 		} else if (words[i] <= 40 && DEDICATION.test(text[0] ?? "")) {
 			roles[i] = "dedication";
 		} else if (looksLikeEpigraph(text, words[i])) roles[i] = "epigraph";
+	}
+
+	for (let i = lastCore + 1; i < sections.length; i++) {
+		if (partOfIndex(i)) roles[i] = "index";
 	}
 
 	for (let i = 0; i < firstCore; i++) {

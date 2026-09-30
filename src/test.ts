@@ -467,6 +467,45 @@ async function run() {
 			lastRole(section("Chapter 3", prose(3) + notes, [0, 1])) === "kept",
 			"a chapter ending in its own footnotes stays",
 		);
+
+		const entries = Array.from({ length: 40 }, (_, i) =>
+			i % 3 === 2
+				? "– and its uses"
+				: `${String.fromCharCode(97 + Math.floor(i / 2))}lpha entry`,
+		);
+		const asLines = (lines: string[]) =>
+			lines.map((l) => `<p>${l}</p>`).join("");
+		assert(
+			lastRole(section("", asLines(entries))) === "index",
+			"an untitled alphabetical list after the last chapter is an index",
+		);
+		assert(
+			lastRole(section("", asLines([...entries].reverse()))) === "kept",
+			"the same lines out of order are not",
+		);
+		assert(
+			lastRole(
+				section("", asLines(entries.map((e, i) => `${e}, ${i + 9}`).reverse())),
+			) === "index",
+			"lines ending in page numbers make an index in any order",
+		);
+		assert(
+			lastRole(section("Index", "<h1>Index</h1>")) === "index",
+			"a page holding only an index's title goes with it",
+		);
+		const [, , epilogue, index] = classifySections(
+			[
+				chapter(1),
+				chapter(2),
+				section("", `<h2>Epilogue</h2><p>${sentence(4, 60)}</p>`),
+				section("Index", asLines(entries)),
+			],
+			book,
+		);
+		assert(
+			!epilogue.omit && index.omit,
+			"a short epilogue just before the index stays",
+		);
 	}
 
 	title("pagination");
