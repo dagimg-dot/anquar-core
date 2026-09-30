@@ -1,4 +1,5 @@
 import { listCharCount } from "./blocks.ts";
+import { hardSplit, splitSentences } from "./sentences.ts";
 import type {
 	Block,
 	ChunkConfig,
@@ -11,66 +12,6 @@ import type {
 import { normalizeRuns, runsText } from "./utils/runs.ts";
 
 const BEFORE_FIRST_BLOCK = -1;
-
-const SENTENCE_END = /[.!?。！？"'”’»）」』]$/;
-
-export function splitSentences(text: string): string[] {
-	const ABBREVIATIONS =
-		/\b(?:Dr|Mr|Mrs|Ms|St|vs|etc|i\.e|e\.g|dept|approx|Jr|Sr|Prof|Capt|Lt|Col|Gen|Sgt|p\.|pp\.|vol|fig|al|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$/i;
-
-	const raw = text
-		.replace(/\r\n/g, "\n")
-		.replace(/\.\.\./g, "\u0000ELLIPSIS\u0000")
-		.replace(/\n\n+/g, "\u0000PARA\u0000");
-
-	const marked = raw.replace(
-		/(?<![A-Z][a-z]\.)(?<!\b\w\.\w\.)(?<!\.\.\.)([.!?。！？])(["'）」』]*)\s+(?=[\p{Lu}"'（「『]|$)/gu,
-		"$1$2\u0000SENT\u0000",
-	);
-
-	const candidates = marked
-		.split("\u0000SENT\u0000")
-		.map((s) => s.replaceAll("\u0000PARA\u0000", "\n\n"))
-		.map((s) => s.replaceAll("\u0000ELLIPSIS\u0000", "..."))
-		.map((s) => s.trim())
-		.filter(Boolean);
-
-	const merged: string[] = [];
-	for (const c of candidates) {
-		const endsWithTerminal = SENTENCE_END.test(c);
-		const isAbbreviation = ABBREVIATIONS.test(c);
-		if (!endsWithTerminal && merged.length > 0 && !isAbbreviation) {
-			merged[merged.length - 1] += ` ${c}`;
-		} else {
-			merged.push(c);
-		}
-	}
-
-	return merged;
-}
-
-export function hardSplit(text: string, maxChars: number): string[] {
-	if (text.length <= maxChars) return [text];
-
-	const chunks: string[] = [];
-	let remaining = text;
-
-	while (remaining.length > maxChars) {
-		const slice = remaining.slice(0, maxChars);
-		const lastSpace = slice.lastIndexOf(" ");
-
-		if (lastSpace === -1) {
-			chunks.push(remaining.slice(0, maxChars));
-			remaining = remaining.slice(maxChars);
-		} else {
-			chunks.push(remaining.slice(0, lastSpace));
-			remaining = remaining.slice(lastSpace + 1);
-		}
-	}
-
-	if (remaining.length > 0) chunks.push(remaining);
-	return chunks;
-}
 
 function runOffsets(runs: StyleRun[]): number[] {
 	const offsets: number[] = [];

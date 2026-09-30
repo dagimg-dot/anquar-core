@@ -4,15 +4,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { materializeBlocks } from "./blocks.ts";
-import {
-	chunkBlocks,
-	chunkBook,
-	hardSplit,
-	splitSentences,
-} from "./chunker.ts";
+import { chunkBlocks, chunkBook } from "./chunker.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { parseEpub } from "./node.ts";
+import { hardSplit, splitSentences } from "./sentences.ts";
 import type { Block, ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 
@@ -32,6 +28,9 @@ function assert(condition: boolean, msg: string) {
 	}
 }
 
+const same = (a: unknown, b: unknown) =>
+	JSON.stringify(a) === JSON.stringify(b);
+
 function title(name: string) {
 	console.log(`\n── ${name} ──`);
 }
@@ -44,33 +43,83 @@ async function run() {
 
 	title("splitSentences");
 	assert(
-		JSON.stringify(splitSentences("Hello world. This is fine.")) ===
-			JSON.stringify(["Hello world.", "This is fine."]),
+		same(splitSentences("Hello world. This is fine."), [
+			"Hello world.",
+			"This is fine.",
+		]),
 		"splits on period",
 	);
 	assert(
-		JSON.stringify(splitSentences("What? Really! Yes.")) ===
-			JSON.stringify(["What?", "Really!", "Yes."]),
+		same(splitSentences("What? Really! Yes."), ["What?", "Really!", "Yes."]),
 		"splits on ? and !",
 	);
-	{
-		const r = splitSentences("He arrived at 5 p.m. and waited.");
-		assert(r.length >= 1, "handles abbreviations without crashing");
-	}
-	{
-		const r = splitSentences("I wonder... what if? Let's go.");
-		assert(r.length === 2, "preserves ellipsis (2 parts)");
-		assert(r[0] === "I wonder... what if?", "ellipsis not a boundary");
-	}
-	{
-		const r = splitSentences("No punctuation here");
-		assert(r.length === 1, "no split without punctuation");
-		assert(r[0] === "No punctuation here", "returns input as-is");
-	}
-	{
-		const r = splitSentences("   ");
-		assert(r.length === 0, "empty result for whitespace-only");
-	}
+	assert(
+		same(splitSentences("He arrived at 5 p.m. and waited."), [
+			"He arrived at 5 p.m. and waited.",
+		]),
+		"a lowercase word after a period continues the sentence",
+	);
+	assert(
+		same(splitSentences("I wonder... what if? Let's go."), [
+			"I wonder... what if?",
+			"Let's go.",
+		]),
+		"an ellipsis before lowercase is not a boundary",
+	);
+	assert(
+		same(splitSentences("No punctuation here"), ["No punctuation here"]),
+		"no split without punctuation",
+	);
+	assert(
+		splitSentences("   ").length === 0,
+		"empty result for whitespace-only",
+	);
+	assert(
+		same(
+			splitSentences(
+				"Eno calls it “scenius.” Under this model, ideas come from groups. “Really?” she asked.",
+			),
+			[
+				"Eno calls it “scenius.”",
+				"Under this model, ideas come from groups.",
+				"“Really?” she asked.",
+			],
+		),
+		"curly quotes close a sentence and open the next",
+	);
+	assert(
+		same(splitSentences("“Wait!” he said. Then he left."), [
+			"“Wait!” he said.",
+			"Then he left.",
+		]),
+		"a quoted exclamation followed by lowercase stays one sentence",
+	);
+	assert(
+		same(splitSentences("Mr. Smith met Dr. Jones. They talked."), [
+			"Mr. Smith met Dr. Jones.",
+			"They talked.",
+		]),
+		"honorifics do not end sentences",
+	);
+	assert(
+		splitSentences("J. B. S. Haldane agreed with Mortimer J. Adler.").length ===
+			1,
+		"initials do not end sentences",
+	);
+	assert(
+		same(splitSentences("It rained… Then it stopped."), [
+			"It rained…",
+			"Then it stopped.",
+		]),
+		"an ellipsis before a capital is a boundary",
+	);
+	assert(
+		same(splitSentences("今日は晴れ。明日は雨。"), [
+			"今日は晴れ。",
+			"明日は雨。",
+		]),
+		"ideographic stops split without spaces",
+	);
 
 	title("hardSplit");
 	{
