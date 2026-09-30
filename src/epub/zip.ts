@@ -1,13 +1,13 @@
+/** Entries stay as bytes; text is decoded on first read, since most of an EPUB's bytes are images. */
 interface ZipEntry {
-	text: string;
-	binary: Uint8Array | null;
+	binary: Uint8Array;
+	text?: string;
 }
 
 /** Structural views of the two zip backends, so this file depends on neither. */
 interface JSZipEntry {
 	dir: boolean;
-	async(type: "string"): Promise<string>;
-	async(type: "arraybuffer"): Promise<ArrayBuffer>;
+	async(type: "uint8array"): Promise<Uint8Array>;
 }
 
 export interface JSZipLike {
@@ -44,14 +44,9 @@ export class EpubZip {
 	/** Create from an AdmZip instance (Node/Bun). */
 	static fromAdmZip(zip: AdmZipLike): EpubZip {
 		const result = new EpubZip();
-		const decoder = new TextDecoder();
 		for (const entry of zip.getEntries()) {
 			if (entry.isDirectory) continue;
-			const bytes = entry.getData();
-			result.entries.set(entry.entryName, {
-				text: decoder.decode(bytes),
-				binary: bytes,
-			});
+			result.entries.set(entry.entryName, { binary: entry.getData() });
 		}
 		return result;
 	}
@@ -64,11 +59,9 @@ export class EpubZip {
 			const file = jsZip.files[name];
 			if (file.dir) continue;
 			promises.push(
-				(async () => {
-					const text = await file.async("string");
-					const ab = await file.async("arraybuffer");
-					result.entries.set(name, { text, binary: new Uint8Array(ab) });
-				})(),
+				file.async("uint8array").then((binary) => {
+					result.entries.set(name, { binary });
+				}),
 			);
 		}
 		await Promise.all(promises);
@@ -77,7 +70,10 @@ export class EpubZip {
 
 	/** Read a file as text. Returns empty string if not found. */
 	readText(path: string): string {
-		return this.entries.get(path)?.text ?? "";
+		const entry = this.entries.get(path);
+		if (!entry) return "";
+		entry.text ??= new TextDecoder().decode(entry.binary);
+		return entry.text;
 	}
 
 	/** Read a file as binary. Returns null if not found. */
