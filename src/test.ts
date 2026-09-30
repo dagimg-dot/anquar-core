@@ -359,6 +359,21 @@ async function run() {
 			"an empty cell leaves no divider behind",
 		);
 
+		const [header, figures, ...layout] = extract(
+			"<table><tr><th><p><b>Precision</b></p></th><th><p><b>Squared</b></p></th></tr><tr><td><p>3</p></td><td><p>9</p></td></tr><tr><td><p>One paragraph.</p><p>Another.</p></td><td>Side</td></tr></table>",
+		);
+		assert(
+			header?.type === "text" &&
+				header.content === "Precision · Squared" &&
+				figures?.type === "text" &&
+				figures.content === "3 · 9",
+			"a row whose cells each hold a paragraph still reads as one line",
+		);
+		assert(
+			layout.length === 3,
+			"a cell holding several paragraphs keeps them apart",
+		);
+
 		const listed = extract(
 			"<dl><dt>Azoth</dt><dd>The perfect woman</dd></dl><aside>Six daughters</aside><aside>One body</aside>",
 		);

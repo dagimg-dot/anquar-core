@@ -84,6 +84,8 @@ const BLOCK_TAGS = new Set([
 
 const CELL_SEPARATOR = " · ";
 
+const ROW_BREAKERS = ["img", "ul", "ol", "table", "hr"];
+
 const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
 
 const TITLE_MAX_CHARS = 70;
@@ -162,6 +164,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 		let pendingTag = "";
 		let cellAwaitingSeparator = false;
+		let cellHasText = false;
+		let rowDepth = 0;
 		const titleCandidates = new Set<number>();
 
 		const pushBreak = () => {
@@ -217,6 +221,39 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 					c.nodeType === NODE_ELEMENT &&
 					(tagOf(c) === wanted || contains(c, wanted)),
 			);
+
+		const paragraphsIn = (n: WalkNode): number => {
+			let count = 0;
+			let ownText = false;
+			for (const c of n.childNodes ?? []) {
+				if (c.nodeType === NODE_TEXT) {
+					if (readable(c.textContent).trim()) ownText = true;
+					continue;
+				}
+				if (c.nodeType !== NODE_ELEMENT) continue;
+				const tag = tagOf(c);
+				if (SKIP_TAGS.has(tag)) continue;
+				if (BLOCK_TAGS.has(tag) || HEADING_LEVELS.has(tag)) {
+					count += paragraphsIn(c);
+				} else if (readable(c.textContent).trim()) {
+					ownText = true;
+				}
+			}
+			return count + (ownText ? 1 : 0);
+		};
+
+		const readsAsOneLine = (row: WalkNode): boolean => {
+			const cells = (row.childNodes ?? []).filter(
+				(c) =>
+					c.nodeType === NODE_ELEMENT &&
+					(tagOf(c) === "td" || tagOf(c) === "th"),
+			);
+			return (
+				cells.length > 1 &&
+				!ROW_BREAKERS.some((tag) => contains(row, tag)) &&
+				cells.every((cell) => paragraphsIn(cell) <= 1)
+			);
+		};
 
 		const isNote = (n: WalkNode, tag: string, before: string): boolean => {
 			const kind = `${n.getAttribute?.("epub:type") ?? ""} ${n.getAttribute?.("role") ?? ""}`;
@@ -328,11 +365,13 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 			if (n.nodeType === NODE_TEXT) {
 				const text = readable(n.textContent);
-				if (cellAwaitingSeparator && text.trim()) {
+				const visible = text.trim() !== "";
+				if (cellAwaitingSeparator && visible) {
 					runs.push({ text: CELL_SEPARATOR, bold: false, italic: false });
 					cellAwaitingSeparator = false;
 				}
 				if (text) runs.push({ text, ...inherited });
+				if (visible) cellHasText = true;
 				return;
 			}
 
@@ -364,6 +403,30 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			}
 
 			const style = computeStyle(n, inherited);
+
+			if (rowDepth > 0) {
+				if (tag === "td" || tag === "th") {
+					cellAwaitingSeparator = runsText(runs).trim() !== "";
+					cellHasText = false;
+				} else if (
+					(BLOCK_TAGS.has(tag) || HEADING_LEVELS.has(tag)) &&
+					cellHasText
+				) {
+					runs.push({ text: LINE_BREAK, ...style });
+				}
+				for (const c of n.childNodes ?? []) walk(c, style);
+				return;
+			}
+
+			if (tag === "tr" && readsAsOneLine(n)) {
+				flush();
+				pendingTag = "tr";
+				rowDepth++;
+				for (const c of n.childNodes ?? []) walk(c, style);
+				rowDepth--;
+				flush();
+				return;
+			}
 
 			const level = HEADING_LEVELS.get(tag);
 			if (level !== undefined) {
