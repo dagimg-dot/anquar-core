@@ -15,5 +15,9 @@ export async function parseEpub(
 			? new AdmZip(input)
 			: new AdmZip(input as unknown as Buffer),
 	);
-	return parseEpubFromZip(zip, options);
+	return parseEpubFromZip(
+		zip,
+		options,
+		typeof input === "string" ? input : undefined,
+	);
 }

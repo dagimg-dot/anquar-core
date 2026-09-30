@@ -24,11 +24,22 @@ const MAX_FRONT_MATTER_SHARE = 0.25;
 
 const MIN_FRONT_MATTER_SCAN = 6;
 
+const RECORD_ID_AS_TITLE =
+	/^([0-9a-f]{16,}|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|unknown)$/i;
+
 function cleanTitle(title: string): string {
 	return decodeEntities(title)
 		.replace(INVISIBLE, "")
 		.replace(/\s+/g, " ")
 		.trim();
+}
+
+function titleFromFileName(name: string): string {
+	const stem = name.replace(/^.*[\\/]/, "").replace(/\.epub$/i, "");
+	const words = stem.includes(" ")
+		? stem.replace(/_+/g, " ")
+		: stem.replace(/[-_]+/g, " ");
+	return words.replace(/\s+/g, " ").trim();
 }
 
 function chapterWordCount(chapter: ParsedChapter): number {
@@ -86,12 +97,13 @@ export async function parseEpubFromFile(
 	options?: Partial<ParseOptions>,
 ): Promise<ParsedBook> {
 	const zip = await EpubZip.fromJSZip(await JSZip.loadAsync(file));
-	return parseEpubFromZip(zip, options);
+	return parseEpubFromZip(zip, options, file.name);
 }
 
 export async function parseEpubFromZip(
 	zip: EpubZip,
 	opts?: Partial<ParseOptions>,
+	fileName?: string,
 ): Promise<ParsedBook> {
 	const options: ParseOptions = { ...DEFAULT_PARSE_OPTIONS, ...opts };
 
@@ -102,7 +114,11 @@ export async function parseEpubFromZip(
 	}
 	const opf = parseOpf(opfXml, opfRel);
 
-	const title = cleanTitle(opf.title);
+	const metadataTitle = cleanTitle(opf.title);
+	const title =
+		RECORD_ID_AS_TITLE.test(metadataTitle) && fileName
+			? titleFromFileName(fileName)
+			: metadataTitle;
 	const author = cleanTitle(opf.author);
 
 	const coverItem = opf.manifest.get(opf.coverId);
