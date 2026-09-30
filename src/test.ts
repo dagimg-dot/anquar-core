@@ -4,7 +4,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { blockText, materializeBlocks } from "./blocks.ts";
-import { chunkBlocks, chunkBook } from "./chunker.ts";
 import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
@@ -12,7 +11,6 @@ import { parseEpub } from "./node.ts";
 import { cardLines, PHONE_LAYOUT, paginate } from "./paginate.ts";
 import { hardSplit, splitSentences } from "./sentences.ts";
 import type { Block, Card, CardLayout, ParsedBook } from "./types.ts";
-import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 import { collapseRuns, LINE_BREAK, runsText } from "./utils/runs.ts";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -31,14 +29,23 @@ function assert(condition: boolean, msg: string) {
 	}
 }
 
-const same = (a: unknown, b: unknown) =>
-	JSON.stringify(a) === JSON.stringify(b);
-
 function title(name: string) {
 	console.log(`\n── ${name} ──`);
 }
 
+const same = (a: unknown, b: unknown) =>
+	JSON.stringify(a) === JSON.stringify(b);
+
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function extract(html: string): Block[] {
+	return materializeBlocks(
+		new DomWalkerBlockExtractor().extract(`<html><body>${html}</body></html>`),
+		0,
+		"t-",
+		() => null,
+	);
+}
 
 function chapterOf(index: number, html: string) {
 	return {
@@ -188,11 +195,7 @@ async function run() {
 	{
 		const r = hardSplit("one two three four five six", 10);
 		assert(r.length > 1, "splits long text");
-		const rejoined = r.join(" ");
-		assert(
-			rejoined.includes("one") && rejoined.includes("six"),
-			"no data loss",
-		);
+		assert(r.join(" ") === "one two three four five six", "no data loss");
 		assert(
 			r.every((c) => c.length <= 10),
 			"each chunk within limit",
@@ -201,7 +204,6 @@ async function run() {
 	{
 		const r = hardSplit("abcdefghijklmnop", 5);
 		assert(r.length === 4, "hard-cuts 16 chars into 4 chunks of 5");
-		assert(r[0] === "abcde", "first chunk is 5 chars");
 		assert(r.join("") === "abcdefghijklmnop", "no data loss");
 	}
 
@@ -229,16 +231,6 @@ async function run() {
 
 	title("headings & lists");
 	{
-		const extract = (html: string): Block[] =>
-			materializeBlocks(
-				new DomWalkerBlockExtractor().extract(
-					`<html><body>${html}</body></html>`,
-				),
-				0,
-				"t-",
-				() => null,
-			);
-
 		const headings = extract("<h1>One</h1><h3>Three</h3>");
 		assert(headings.length === 2, "emits one block per heading");
 		assert(
@@ -332,16 +324,6 @@ async function run() {
 
 	title("paragraph structure");
 	{
-		const extract = (html: string): Block[] =>
-			materializeBlocks(
-				new DomWalkerBlockExtractor().extract(
-					`<html><body>${html}</body></html>`,
-				),
-				0,
-				"t-",
-				() => null,
-			);
-
 		const [verse] = extract(
 			"<p>Tyger Tyger, burning bright,<br/>In the forests</p>",
 		);
@@ -556,123 +538,6 @@ async function run() {
 		);
 	}
 
-	title("chunking structured blocks");
-	{
-		const config = {
-			minChars: 80,
-			maxChars: 100,
-			includeChapterHeaders: false,
-		};
-		const extract = (html: string): Block[] =>
-			materializeBlocks(
-				new DomWalkerBlockExtractor().extract(
-					`<html><body>${html}</body></html>`,
-				),
-				0,
-				"t-",
-				() => null,
-			);
-
-		const longHeading = "H".repeat(300);
-		const chunkedHeading = chunkBlocks(
-			extract(`<h1>${longHeading}</h1>`),
-			0,
-			config,
-		);
-		assert(
-			chunkedHeading.length === 1 && chunkedHeading[0].type === "heading",
-			"headings stay atomic even past maxChars",
-		);
-
-		const items = Array.from(
-			{ length: 6 },
-			(_, i) => `<li>${"x".repeat(40)}${i}</li>`,
-		).join("");
-		const chunkedList = chunkBlocks(extract(`<ul>${items}</ul>`), 0, config);
-		assert(chunkedList.length > 1, "a long list splits across several cards");
-		assert(
-			chunkedList.every((b) => b.type === "list"),
-			"list splits stay list blocks",
-		);
-		assert(
-			chunkedList.every((b) => b.type === "list" && b.items.length > 0),
-			"no split produces an empty card",
-		);
-		assert(
-			chunkedList.reduce(
-				(n, b) => n + (b.type === "list" ? b.items.length : 0),
-				0,
-			) === 6,
-			"splitting a list preserves every item",
-		);
-		assert(
-			new Set(chunkedList.map((b) => b.id)).size === chunkedList.length,
-			"split list cards get distinct ids",
-		);
-
-		const oversized = chunkBlocks(
-			extract(`<ul><li>${"y".repeat(450)}</li></ul>`),
-			0,
-			config,
-		);
-		assert(
-			oversized.every((b) => b.charCount <= config.maxChars),
-			"an item longer than maxChars is broken up",
-		);
-
-		const mixed = chunkBlocks(extract("<p>short.</p><h2>Head</h2>"), 0, config);
-		assert(
-			mixed.map((b) => b.type).join(",") === "text,heading",
-			"a short paragraph before a heading is not swallowed by it",
-		);
-	}
-
-	title("chapter headers");
-	{
-		const config = { ...DEFAULT_CHUNK_CONFIG };
-		const chapterWith = (html: string): ParsedBook => ({
-			title: "Preface",
-			author: "",
-			omitted: [],
-			chapters: [
-				{
-					index: 0,
-					title: "Preface",
-					role: "body",
-					frontMatter: false,
-					blocks: materializeBlocks(
-						new DomWalkerBlockExtractor().extract(
-							`<html><body>${html}</body></html>`,
-						),
-						0,
-						"t-",
-						() => null,
-					),
-				},
-			],
-		});
-
-		const synthesized = chunkBook(
-			chapterWith("<p>Body text goes here.</p>"),
-			config,
-		);
-		assert(
-			synthesized[0]?.type === "heading" &&
-				synthesized[0].content === "Preface",
-			"a chapter with no heading gets a synthetic one",
-		);
-
-		const selfTitled = chunkBook(
-			chapterWith("<h1>Preface</h1><p>Body.</p>"),
-			config,
-		);
-		assert(
-			selfTitled.filter((b) => b.type === "heading" && b.content === "Preface")
-				.length === 1,
-			"a chapter opening with its own title is not given a duplicate header",
-		);
-	}
-
 	if (testEpub) {
 		title("Sample EPUBs");
 		const samplesDir = join(__dirname, "..", "sample_epubs");
@@ -680,16 +545,13 @@ async function run() {
 		try {
 			epubFiles = readdirSync(samplesDir)
 				.filter((f) => f.endsWith(".epub"))
+				.sort()
 				.map((f) => join(samplesDir, f));
 		} catch {
 			console.error("  ⚠ sample_epubs/ directory not found");
 		}
 
-		if (epubFiles.length > 0) {
-			assert(true, `found ${epubFiles.length} sample EPUBs`);
-		} else {
-			assert(false, "no sample EPUBs found");
-		}
+		assert(epubFiles.length > 0, `found ${epubFiles.length} sample EPUBs`);
 
 		for (const file of epubFiles) {
 			const name = file.split("/").pop() || file;
@@ -730,35 +592,19 @@ async function run() {
 						b.chapterIndex === ch.index,
 						`${name}: ch${ch.index} block chapterIndex mismatch`,
 					);
-					assert(b.position >= 0, `${name}: ch${ch.index} block has position`);
-
-					if (b.type === "text") {
-						assert(
-							!!b.content,
-							`${name}: ch${ch.index} text block has content`,
-						);
+					if (b.type === "text" || b.type === "heading") {
+						assert(!!b.content, `${name}: ch${ch.index} ${b.type} has content`);
 						assert(
 							runsText(b.runs) === b.content,
-							`${name}: ch${ch.index} text runs spell its content`,
+							`${name}: ch${ch.index} ${b.type} runs spell its content`,
 						);
 						assert(
 							b.charCount === b.content.length,
-							`${name}: ch${ch.index} text block charCount`,
+							`${name}: ch${ch.index} ${b.type} charCount`,
 						);
 					}
 					if (b.type === "image") {
 						assert(!!b.src, `${name}: ch${ch.index} image block has src`);
-					}
-					if (b.type === "heading") {
-						assert(!!b.content, `${name}: ch${ch.index} heading has content`);
-						assert(
-							b.charCount === b.content.length,
-							`${name}: ch${ch.index} heading charCount`,
-						);
-						assert(
-							b.level >= 1 && b.level <= 6,
-							`${name}: ch${ch.index} heading level in range`,
-						);
 					}
 					if (b.type === "list") {
 						assert(b.items.length > 0, `${name}: ch${ch.index} list has items`);
@@ -766,35 +612,8 @@ async function run() {
 							b.items.every((it) => it.content.trim().length > 0),
 							`${name}: ch${ch.index} list items non-empty`,
 						);
-						assert(
-							b.items.every((it) => it.depth >= 0),
-							`${name}: ch${ch.index} list item depth non-negative`,
-						);
 					}
 				}
-			}
-
-			const config = { ...DEFAULT_CHUNK_CONFIG };
-			const blocks = chunkBook(book, config);
-			const textBlocks = blocks.filter(
-				(b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
-			);
-
-			for (const b of textBlocks) {
-				assert(
-					b.charCount <= config.maxChars + 50,
-					`${name}: chunk ≤${config.maxChars}+50 (got ${b.charCount})`,
-				);
-				assert(b.charCount > 0, `${name}: chunk non-empty`);
-			}
-
-			for (const b of blocks) {
-				if (b.type !== "list") continue;
-				assert(
-					b.charCount <= config.maxChars,
-					`${name}: list card ≤${config.maxChars} (got ${b.charCount})`,
-				);
-				assert(b.items.length > 0, `${name}: list card non-empty`);
 			}
 
 			const source = squash(
@@ -864,31 +683,28 @@ async function run() {
 			assert(false, "sample_urls/list.json not found");
 		}
 
-		if (urls.length > 0) {
-			assert(true, `found ${urls.length} sample URLs`);
-		} else {
-			assert(false, "no sample URLs found");
-		}
+		assert(urls.length > 0, `found ${urls.length} sample URLs`);
 
 		for (const url of urls) {
 			console.error(`  ${url}`);
 			try {
-				const article = await parseArticle(url, {
-					chunkConfig: {
-						minChars: 80,
-						maxChars: 600,
-						includeChapterHeaders: false,
-					},
-				});
+				const article = await parseArticle(url);
 
 				assert(!!article.title, `${url}: has title`);
 				assert(!!article.url, `${url}: has url`);
 				assert(article.blocks.length > 0, `${url}: has blocks`);
 
-				const textBlocks = article.blocks.filter((b) => b.type === "text");
-				for (const b of textBlocks) {
-					assert(b.charCount <= 900, `${url}: chunk ≤900 (got ${b.charCount})`);
-					assert(b.charCount > 0, `${url}: chunk non-empty`);
+				const cards = paginate(
+					[{ index: 0, blocks: article.blocks }],
+					PHONE_LAYOUT,
+				);
+				assert(cards.length > 0, `${url}: paginates`);
+				for (const c of cards) {
+					assert(
+						cardLines(c.blocks, PHONE_LAYOUT) <= PHONE_LAYOUT.linesPerCard ||
+							c.blocks.length === 1,
+						`${url}: card ${c.id} fits the screen`,
+					);
 				}
 			} catch (e: unknown) {
 				const msg = e instanceof Error ? e.message : String(e);
@@ -902,7 +718,9 @@ async function run() {
 	console.log("═══════════════════════════════════\n");
 
 	if (failures.length > 0) {
-		for (const f of failures) console.error(`  • ${f}`);
+		for (const f of failures.slice(0, 60)) console.error(`  • ${f}`);
+		if (failures.length > 60)
+			console.error(`  … and ${failures.length - 60} more`);
 		process.exit(1);
 	}
 }

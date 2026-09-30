@@ -1,15 +1,12 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import { materializeBlocks } from "../blocks.ts";
-import { chunkBlocks } from "../chunker.ts";
 import { DomWalkerBlockExtractor } from "../extractors/block/dom-walker.ts";
-import type { ChunkConfig, ParsedArticle } from "../types.ts";
-import { DEFAULT_CHUNK_CONFIG } from "../types.ts";
+import type { ParsedArticle } from "../types.ts";
 import { decodeEntities } from "../utils/entities.ts";
 import { asFullHtml, cleanupArticle } from "./cleanup.ts";
 
 export interface ArticleOptions {
-	chunkConfig?: ChunkConfig;
 	userAgent?: string;
 }
 
@@ -22,8 +19,6 @@ export async function parseArticle(
 		| { html: string; url?: string; title?: string; author?: string },
 	options?: ArticleOptions,
 ): Promise<ParsedArticle> {
-	const config = options?.chunkConfig ?? DEFAULT_CHUNK_CONFIG;
-
 	let html: string;
 	let url: string;
 	let titleOverride: string | undefined;
@@ -63,14 +58,12 @@ export async function parseArticle(
 
 	const blocks = materializeBlocks(rawBlocks, 0, "a-", () => null);
 
-	const chunked = chunkBlocks(blocks, 0, config);
-
 	return {
 		title: decodeEntities(titleOverride ?? article.title ?? ""),
 		author: decodeEntities(authorOverride ?? article.byline ?? ""),
 		siteName: article.siteName ?? "",
 		url,
 		published: article.publishedTime ?? undefined,
-		blocks: chunked,
+		blocks,
 	};
 }

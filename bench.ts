@@ -13,12 +13,12 @@ const files = readdirSync(samplesDir)
 	.sort();
 
 console.log(
-	`${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Blocks".padEnd(7)}`,
+	`${"File".padEnd(42)} ${"Size".padEnd(8)} ${"Time".padEnd(8)} ${"Chaps".padEnd(6)} ${"Cards".padEnd(7)}`,
 );
 console.log("─".repeat(75));
 
 let totalTime = 0;
-let totalBlocks = 0;
+let totalCards = 0;
 
 for (const file of files) {
 	const path = join(samplesDir, file);
@@ -34,16 +34,16 @@ for (const file of files) {
 	const _stdout = proc.stdout.toString();
 	const stderr = proc.stderr.toString();
 
-	const chapMatch = stderr.match(/(\d+) chapters? → (\d+) blocks?/);
+	const chapMatch = stderr.match(/(\d+) chapters? → (\d+) cards?/);
 	const chaps = chapMatch?.[1] ?? "?";
-	const blocks = parseInt(chapMatch?.[2] ?? "0", 10);
+	const cards = parseInt(chapMatch?.[2] ?? "0", 10);
 
 	totalTime += parseInt(elapsed, 10);
-	totalBlocks += blocks;
+	totalCards += cards;
 
 	const status = proc.exitCode === 0 ? " " : "⚠";
 	console.log(
-		`${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(blocks).padEnd(7)}`,
+		`${status} ${file.padEnd(40)} ${size.padEnd(8)} ${elapsed.padEnd(8)} ${String(chaps).padEnd(6)} ${String(cards).padEnd(7)}`,
 	);
 
 	if (proc.exitCode !== 0) {
@@ -53,6 +53,6 @@ for (const file of files) {
 
 console.log("─".repeat(75));
 const numFiles = files.length;
-console.log(`  ${numFiles} files, ${totalTime}ms total, ${totalBlocks} blocks`);
+console.log(`  ${numFiles} files, ${totalTime}ms total, ${totalCards} cards`);
 console.log(`  Avg: ${(totalTime / numFiles).toFixed(0)}ms per file`);
-console.log(`  Blocks/sec: ${(totalBlocks / (totalTime / 1000)).toFixed(0)}`);
+console.log(`  Cards/sec: ${(totalCards / (totalTime / 1000)).toFixed(0)}`);

@@ -114,18 +114,6 @@ export interface ParsedArticle {
 	blocks: Block[];
 }
 
-export interface ChunkConfig {
-	minChars: number;
-	maxChars: number;
-	includeChapterHeaders: boolean;
-}
-
-export const DEFAULT_CHUNK_CONFIG: ChunkConfig = {
-	minChars: 80,
-	maxChars: 600,
-	includeChapterHeaders: true,
-};
-
 export interface CardLayout {
 	/** An average over running prose, word wrap included: a long paragraph's length over its lines. */
 	charsPerLine: number;

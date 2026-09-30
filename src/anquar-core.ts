@@ -1,5 +1,4 @@
 export { blockText, listCharCount, wordCount } from "./blocks.ts";
-export { chunkBlocks, chunkBook } from "./chunker.ts";
 export type { ParseOptions } from "./config.ts";
 export { EpubZip } from "./epub/zip.ts";
 export type { ArticleOptions } from "./everything/article.ts";
@@ -20,7 +19,6 @@ export type {
 	Block,
 	Card,
 	CardLayout,
-	ChunkConfig,
 	HeadingBlock,
 	HeadingLevel,
 	ImageBlock,
@@ -37,5 +35,5 @@ export type {
 	StyleRun,
 	TextBlock,
 } from "./types.ts";
-export { DEFAULT_CHUNK_CONFIG, isProseBlock } from "./types.ts";
+export { isProseBlock } from "./types.ts";
 export { collapseRuns, normalizeRuns, runsText } from "./utils/runs.ts";
