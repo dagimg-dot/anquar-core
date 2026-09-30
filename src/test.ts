@@ -9,8 +9,9 @@ import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { parseEpub } from "./node.ts";
+import { cardLines, PHONE_LAYOUT, paginate } from "./paginate.ts";
 import { hardSplit, splitSentences } from "./sentences.ts";
-import type { Block, ParsedBook } from "./types.ts";
+import type { Block, Card, CardLayout, ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 import { collapseRuns, LINE_BREAK, runsText } from "./utils/runs.ts";
 
@@ -36,6 +37,59 @@ const same = (a: unknown, b: unknown) =>
 function title(name: string) {
 	console.log(`\n── ${name} ──`);
 }
+
+const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function chapterOf(index: number, html: string) {
+	return {
+		index,
+		blocks: materializeBlocks(
+			new DomWalkerBlockExtractor().extract(
+				`<html><body>${html}</body></html>`,
+			),
+			index,
+			`c${index}-`,
+			() => null,
+		),
+	};
+}
+
+const cardText = (card: Card) => squash(card.blocks.map(blockText).join(" "));
+
+const sentence = (n: number, words: number) =>
+	`${["Alpha", "Bravo", "Charlie", "Delta", "Echo"][n % 5]} ${"word ".repeat(words - 2)}end.`;
+
+const LAYOUTS: [string, CardLayout][] = [
+	["large type", { charsPerLine: 20, linesPerCard: 11 }],
+	["phone", PHONE_LAYOUT],
+	["tablet", { charsPerLine: 60, linesPerCard: 30 }],
+];
+
+const FIRST_CARD_OPENINGS: Record<string, string> = {
+	"01-show-your-work.epub": "For Meghan",
+	"02-worldly-philosophers.epub": "To my teachers",
+	"03-tokyo-zodiac-murders.epub": "Whose dark or troubled mind",
+	"04-thinking-fast-and-slow.epub": "Dedication In memory of Amos Tversky",
+	"05-thousand-splendid-suns.epub": "This book is dedicated to Haris and Farah",
+	"06-our-man-in-damascus.epub": "ELIE COHN by Eli Ban-Hanan",
+	"07-what-is-it-like-to-be-a-bat.epub":
+		"Preface “What Is It Like to Be a Bat?”",
+	"08-inference-engineering.epub": "Preface Inference is the most valuable",
+	"09-useful-not-true.epub": "What’s this about? This book is about reframing",
+	"10-flowers-for-algernon.epub": "For my mother And in memory of my father",
+	"11-existentialism-is-a-humanism.epub":
+		"Jean-Paul Sartre 1946 Existentialism Is a Humanism",
+	"12-how-to-read-a-book.epub": "Preface ix:",
+	"13-zero-to-one.epub": "Preface EVERY MOMENT IN BUSINESS",
+	"14-mans-search-for-meaning.epub": "Viktor E. Frankl, c. 1949",
+	"15-nine-billion-names.epub":
+		'The Nine Billion Names of God "Science fiction readers',
+	"16-qed.epub": "PREMESSA Le Alix G. Mautner Memorial Lectures",
+	"17-project-hail-mary.epub": "",
+	"18-post-office.epub": "Several of these chapters appeared",
+	"19-brothers-karamazov.epub": "Epigraph Verily, verily, I say unto you",
+	"20-midnight-library.epub": "To all the health workers.",
+};
 
 const APPARATUS_TEXT =
 	/all rights reserved|\bisbn\b|library of congress|oceanofpdf/i;
@@ -373,6 +427,135 @@ async function run() {
 		assert(opf.coverId === "art", "an EPUB 3 cover-image item is the cover");
 	}
 
+	title("pagination");
+	{
+		const layout: CardLayout = { charsPerLine: 40, linesPerCard: 12 };
+
+		const dialogue = chapterOf(
+			0,
+			Array.from({ length: 20 }, (_, i) => `<p>“Line ${i}.”</p>`).join(""),
+		);
+		const talk = paginate([dialogue], layout);
+		assert(talk.length > 1 && talk.length < 20, "short paragraphs share cards");
+		assert(
+			talk.every((c) => cardLines(c.blocks, layout) <= layout.linesPerCard),
+			"no card is taller than the screen",
+		);
+
+		const long = chapterOf(
+			0,
+			`<p>${Array.from({ length: 30 }, (_, i) => sentence(i, 9)).join(" ")}</p>`,
+		);
+		const pages = paginate([long], layout);
+		assert(pages.length > 1, "a paragraph taller than a card is split");
+		assert(
+			pages.every((c) => /end\.$/.test(cardText(c))),
+			"a split paragraph breaks between sentences",
+		);
+		assert(
+			squash(pages.map(cardText).join(" ")) ===
+				squash(blockText(long.blocks[0])),
+			"splitting a paragraph neither loses nor repeats text",
+		);
+		assert(
+			new Set(pages.map((c) => c.id)).size === pages.length,
+			"split cards get distinct ids",
+		);
+
+		const titled = paginate(
+			[chapterOf(0, `<h1>Title</h1><p>${sentence(0, 12)}</p>`)],
+			layout,
+		);
+		assert(
+			titled.length === 1 &&
+				titled[0].blocks.map((b) => b.type).join() === "heading,text",
+			"a chapter heading sits on the card with the text it opens",
+		);
+
+		const part = paginate(
+			[
+				chapterOf(0, "<h1>Part One</h1>"),
+				chapterOf(1, `<h2>1</h2><p>${sentence(1, 8)}</p>`),
+			],
+			layout,
+		);
+		assert(
+			part.length === 1 && part[0].blocks.length === 3,
+			"a part title heads the first card of the chapter after it",
+		);
+
+		const items = Array.from(
+			{ length: 12 },
+			(_, i) => `<li>${sentence(i, 6)}</li>`,
+		).join("");
+		const listed = paginate([chapterOf(0, `<ol>${items}</ol>`)], layout);
+		const starts = listed.map((c) =>
+			c.blocks[0].type === "list" ? c.blocks[0].start : 0,
+		);
+		assert(listed.length > 1, "a long list splits across cards");
+		assert(
+			starts[0] === 1 && starts.slice(1).every((s, i) => s > starts[i]),
+			"a split ordered list keeps counting",
+		);
+
+		const figure = paginate(
+			[
+				chapterOf(
+					0,
+					`<p>${sentence(2, 60)}</p><img src="a.png"/><p>Figure 1: A chart</p><p>${sentence(3, 8)}</p>`,
+				),
+			],
+			layout,
+		);
+		const pictured = figure.find((c) =>
+			c.blocks.some((b) => b.type === "image"),
+		);
+		assert(
+			pictured?.blocks.map((b) => b.type).join() === "image,text",
+			"a picture shares its card with its caption, and not the long text before it",
+		);
+
+		const widowed = paginate(
+			[
+				chapterOf(
+					0,
+					`<p>${Array.from({ length: 6 }, (_, i) => sentence(i, 12)).join(" ")}</p><p>The end.</p>`,
+				),
+			],
+			layout,
+		);
+		const tail = widowed[widowed.length - 1];
+		assert(
+			widowed.length === 1 || tail.blocks.length > 1,
+			"a chapter does not end on a card holding one short line",
+		);
+		assert(
+			squash(widowed.map(cardText).join(" ")) ===
+				squash(
+					`${Array.from({ length: 6 }, (_, i) => sentence(i, 12)).join(" ")} The end.`,
+				),
+			"rebalancing the last card neither loses nor repeats text",
+		);
+
+		const broken = paginate(
+			[
+				chapterOf(
+					0,
+					`<p>${sentence(4, 8)}</p><hr/><h2>Next</h2><p>${sentence(1, 8)}</p>`,
+				),
+			],
+			layout,
+		);
+		assert(
+			broken.every((c) => c.blocks[c.blocks.length - 1].type !== "break"),
+			"no card ends on a scene break",
+		);
+		assert(
+			!broken.some((c) => c.blocks.some((b) => b.type === "break")),
+			"a scene break right before a heading is dropped",
+		);
+	}
+
 	title("chunking structured blocks");
 	{
 		const config = {
@@ -605,12 +788,6 @@ async function run() {
 				assert(b.charCount > 0, `${name}: chunk non-empty`);
 			}
 
-			const opening = blocks.slice(0, 3).map(blockText).join(" ");
-			assert(
-				!APPARATUS_TEXT.test(opening),
-				`${name}: the feed does not open on copyright or watermarks`,
-			);
-
 			for (const b of blocks) {
 				if (b.type !== "list") continue;
 				assert(
@@ -618,6 +795,60 @@ async function run() {
 					`${name}: list card ≤${config.maxChars} (got ${b.charCount})`,
 				);
 				assert(b.items.length > 0, `${name}: list card non-empty`);
+			}
+
+			const source = squash(
+				book.chapters.flatMap((ch) => ch.blocks.map(blockText)).join(" "),
+			);
+
+			for (const [label, layout] of LAYOUTS) {
+				const cards = paginate(book.chapters, layout);
+				const where = `${name} (${label})`;
+
+				assert(
+					squash(cards.flatMap((c) => c.blocks.map(blockText)).join(" ")) ===
+						source,
+					`${where}: cards hold every word of the book once, in order`,
+				);
+				assert(
+					new Set(cards.map((c) => c.id)).size === cards.length,
+					`${where}: card ids are distinct`,
+				);
+
+				for (const c of cards) {
+					const kinds = c.blocks.map((b) => b.type);
+					assert(c.blocks.length > 0, `${where}: card ${c.id} is not empty`);
+					const height = cardLines(c.blocks, layout);
+					const lone =
+						c.blocks.length === 1 || kinds.every((k) => k === "heading");
+					assert(
+						height <= layout.linesPerCard || lone,
+						`${where}: card ${c.id} fits the screen (${height.toFixed(1)} lines)`,
+					);
+					assert(
+						kinds[kinds.length - 1] !== "heading" ||
+							kinds.every((k) => k === "heading"),
+						`${where}: card ${c.id} does not end on a heading`,
+					);
+					assert(
+						kinds[kinds.length - 1] !== "break",
+						`${where}: card ${c.id} does not end on a scene break`,
+					);
+				}
+			}
+
+			const cards = paginate(book.chapters, PHONE_LAYOUT);
+			const opening = cards.slice(0, 3).map(cardText).join(" ");
+			assert(
+				!APPARATUS_TEXT.test(opening),
+				`${name}: the feed does not open on copyright or watermarks`,
+			);
+			const expected = FIRST_CARD_OPENINGS[name];
+			if (expected !== undefined) {
+				assert(
+					cardText(cards[0]).startsWith(expected),
+					`${name}: opens on "${expected}" (got "${cardText(cards[0]).slice(0, 60)}")`,
+				);
 			}
 		}
 	}

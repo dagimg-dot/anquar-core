@@ -53,3 +53,25 @@ export function collapseRuns(runs: StyleRun[]): StyleRun[] {
 	}
 	return out;
 }
+
+export function sliceRuns(
+	runs: StyleRun[],
+	start: number,
+	end: number,
+): StyleRun[] {
+	const out: StyleRun[] = [];
+	let offset = 0;
+	for (const run of runs) {
+		const runEnd = offset + run.text.length;
+		if (runEnd > start && offset < end) {
+			const text = run.text.slice(
+				Math.max(start, offset) - offset,
+				Math.min(end, runEnd) - offset,
+			);
+			if (text) out.push({ ...run, text });
+		}
+		offset = runEnd;
+		if (offset >= end) break;
+	}
+	return out;
+}

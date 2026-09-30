@@ -125,3 +125,15 @@ export const DEFAULT_CHUNK_CONFIG: ChunkConfig = {
 	maxChars: 600,
 	includeChapterHeaders: true,
 };
+
+export interface CardLayout {
+	/** An average over running prose, word wrap included: a long paragraph's length over its lines. */
+	charsPerLine: number;
+	linesPerCard: number;
+}
+
+export interface Card {
+	id: string;
+	chapterIndex: number;
+	blocks: Block[];
+}
