@@ -3,13 +3,17 @@ import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
 const MAX_TITLE_LENGTH = 60;
 
+const CONVERTER_PLACEHOLDER_TITLE =
+	/^(index|untitled|unknown|document|html|text|content|[\w-]*split[\w-]*|(part|text|section|index|page)[_-]?\d+)$/i;
+
+const BOOK_TITLE_DECORATION = /^(other|continued|cont|part \d+|\d+)?$/;
+
 export class TitleTagExtractor implements TitleExtractor {
 	readonly name = "title-tag";
 
 	async extract(params: TitleExtractorParams): Promise<Map<string, string>> {
 		const titles = new Map<string, string>();
-
-		const bookTitle = this.guessBookTitle(params);
+		const bookTitle = (params.opf.title || "").toLowerCase();
 
 		for (const [href, html] of params.xhtmlFiles) {
 			let doc: ReturnType<typeof parseHTML>["document"];
@@ -23,7 +27,6 @@ export class TitleTagExtractor implements TitleExtractor {
 
 			const text = (titleEl.textContent || "").trim();
 			if (!text) continue;
-
 			if (this.isBoilerplate(text, bookTitle, href)) continue;
 
 			titles.set(href, text);
@@ -32,18 +35,20 @@ export class TitleTagExtractor implements TitleExtractor {
 		return titles;
 	}
 
-	private guessBookTitle(params: TitleExtractorParams): string {
-		return (params.opf.title || "").toLowerCase();
-	}
-
 	private isBoilerplate(
 		text: string,
 		bookTitle: string,
 		href: string,
 	): boolean {
 		const lower = text.toLowerCase();
-		if (lower === bookTitle) return true;
-		if (lower === "untitled") return true;
+		if (bookTitle && lower.includes(bookTitle)) {
+			const decoration = lower
+				.replace(bookTitle, "")
+				.replace(/[^\p{L}\p{N}]+/gu, " ")
+				.trim();
+			if (BOOK_TITLE_DECORATION.test(decoration)) return true;
+		}
+		if (CONVERTER_PLACEHOLDER_TITLE.test(text)) return true;
 		if (/^[.\s-]+$/.test(text)) return true;
 		if (
 			text ===
@@ -53,7 +58,6 @@ export class TitleTagExtractor implements TitleExtractor {
 				?.replace(/\.x?html?$/, "")
 		)
 			return true;
-		if (text.length > MAX_TITLE_LENGTH) return true;
-		return false;
+		return text.length > MAX_TITLE_LENGTH;
 	}
 }
