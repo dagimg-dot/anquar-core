@@ -3,6 +3,7 @@ import type { RawBlock, RawTextBlock } from "./extractors/block/types.ts";
 import { imageSize } from "./utils/image-size.ts";
 
 export interface CleanupSection {
+	title: string;
 	blocks: RawBlock[];
 	imageBytes: (src: string) => Uint8Array | null;
 }
@@ -16,6 +17,19 @@ const WATERMARK = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i;
 const SECTION_NUMBER = /^([0-9]{1,3}|[IVXLC]{1,7})\.?$/;
 
 const PARAGRAPH_END = /[.!?…:;"”’')\]—–-]$/;
+
+function wordsOf(text: string): string[] {
+	return text
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036F]/g, "")
+		.toLowerCase()
+		.split(/[^\p{L}\p{N}]+/u)
+		.filter(Boolean);
+}
+
+function startsWith(words: string[], prefix: string[]): boolean {
+	return prefix.length > 0 && prefix.every((w, i) => words[i] === w);
+}
 
 function imageKey(section: CleanupSection, src: string): Uint8Array | string {
 	return section.imageBytes(src) ?? src;
@@ -35,6 +49,51 @@ function dropDoubledPictures(section: CleanupSection): RawBlock[] {
 			imageKey(section, prev.src) === imageKey(section, block.src)
 		);
 	});
+}
+
+function openWithTitle(title: string, blocks: RawBlock[]): RawBlock[] {
+	const key = wordsOf(title);
+	const hasText = blocks.some((b) => b.type === "text" || b.type === "list");
+	if (key.length === 0 || !hasText) return blocks;
+
+	const first = blocks.findIndex(
+		(b) => b.type !== "image" && b.type !== "break",
+	);
+	const opening = blocks[first];
+	if (opening?.type === "heading") return blocks;
+	const titledNearTop = blocks
+		.slice(first, first + 4)
+		.some(
+			(b) =>
+				b.type === "heading" && wordsOf(b.content).join(" ") === key.join(" "),
+		);
+	if (titledNearTop) return blocks;
+
+	if (opening?.type === "text" && opening.content.length <= 80) {
+		const line = wordsOf(opening.content);
+		const same = line.join(" ") === key.join(" ");
+		const sentence = /[.!?]$/.test(opening.content) && !same;
+		if (!sentence && (startsWith(key, line) || startsWith(line, key))) {
+			const out = [...blocks];
+			out[first] = {
+				type: "heading",
+				level: 1,
+				content: opening.content,
+				runs: opening.runs,
+			};
+			return out;
+		}
+	}
+
+	return [
+		{
+			type: "heading",
+			level: 1,
+			content: title,
+			runs: [{ text: title, bold: false, italic: false }],
+		},
+		...blocks,
+	];
 }
 
 function rejoinPrintLines(blocks: RawBlock[]): RawBlock[] {
@@ -130,7 +189,7 @@ export function cleanupSections(
 						}
 					: block,
 		);
-		return rejoinPrintLines(numbered).filter(
+		return openWithTitle(section.title, rejoinPrintLines(numbered)).filter(
 			(block) => block.type !== "text" || blockText(block),
 		);
 	});

@@ -186,6 +186,7 @@ export async function parseEpubFromZip(
 
 	const cleaned = cleanupSections(
 		kept.map((i) => ({
+			title: sections[i].title,
 			blocks: verdicts[i].keptBlocks,
 			imageBytes: (src: string) => resolveImage(src, docs[i].path),
 		})),
