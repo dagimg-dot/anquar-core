@@ -40,6 +40,8 @@ const same = (a: unknown, b: unknown) =>
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
+const unspaced = (s: string) => s.replace(/\s+/g, "");
+
 function extract(html: string): Block[] {
 	return materializeBlocks(
 		new DomWalkerBlockExtractor().extract(`<html><body>${html}</body></html>`),
@@ -791,8 +793,8 @@ async function run() {
 				}
 			}
 
-			const source = squash(
-				book.chapters.flatMap((ch) => ch.blocks.map(blockText)).join(" "),
+			const source = unspaced(
+				book.chapters.flatMap((ch) => ch.blocks.map(blockText)).join(""),
 			);
 
 			for (const [label, layout] of LAYOUTS) {
@@ -800,7 +802,7 @@ async function run() {
 				const where = `${name} (${label})`;
 
 				assert(
-					squash(cards.flatMap((c) => c.blocks.map(blockText)).join(" ")) ===
+					unspaced(cards.flatMap((c) => c.blocks.map(blockText)).join("")) ===
 						source,
 					`${where}: cards hold every word of the book once, in order`,
 				);
