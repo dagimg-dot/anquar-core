@@ -7,6 +7,7 @@ import { parseOpf } from "./epub/opf.ts";
 import { readLandmarks, typesDeclaredAboveText } from "./epub/semantics.ts";
 import type { JSZipLike } from "./epub/zip.ts";
 import { EpubZip } from "./epub/zip.ts";
+import type { RawBlock } from "./extractors/block/types.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
 import {
 	classifySections,
@@ -139,7 +140,20 @@ export async function parseEpubFromZip(
 		return imageCache.get(key) ?? null;
 	};
 
-	const sections: SectionInput[] = docs.map((doc) => {
+	const docIndex = new Map(docs.map((doc, i) => [doc.path, i]));
+	const backlinksTo = (blocks: RawBlock[], from: number): Set<number> => {
+		const dir = zip.dirname(docs[from].path);
+		const targets = new Set<number>();
+		for (const block of blocks) {
+			if (block.type !== "text" || !block.backlink) continue;
+			const file = hrefKey(block.backlink.split("#")[0]);
+			const target = docIndex.get(zip.resolvePath(dir, file));
+			if (target !== undefined && target !== from) targets.add(target);
+		}
+		return targets;
+	};
+
+	const sections: SectionInput[] = docs.map((doc, i) => {
 		const blocks = options.blockExtractor.extract(doc.html, cssMap);
 		const images = blocks.flatMap((b) =>
 			b.type === "image" ? [resolveImage(b.src, doc.path)] : [],
@@ -154,6 +168,7 @@ export async function parseEpubFromZip(
 			linear: doc.linear,
 			imageSizes: images.map((bytes) => (bytes ? imageSize(bytes) : null)),
 			showsCover: coverImage !== null && images.includes(coverImage),
+			backlinksTo: backlinksTo(blocks, i),
 		};
 	});
 

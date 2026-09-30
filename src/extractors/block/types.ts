@@ -9,6 +9,7 @@ export interface RawTextBlock {
 	type: "text";
 	content: string;
 	runs: StyleRun[];
+	backlink?: string;
 }
 
 export interface RawHeadingBlock {

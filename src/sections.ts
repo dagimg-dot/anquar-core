@@ -1,5 +1,5 @@
 import { blockText, wordCount } from "./blocks.ts";
-import type { RawBlock } from "./extractors/block/types.ts";
+import type { RawBlock, RawTextBlock } from "./extractors/block/types.ts";
 import type { SectionRole } from "./types.ts";
 import type { ImageSize } from "./utils/image-size.ts";
 
@@ -10,6 +10,7 @@ export interface SectionInput {
 	linear: boolean;
 	imageSizes: (ImageSize | null)[];
 	showsCover: boolean;
+	backlinksTo: Set<number>;
 }
 
 export interface SectionVerdict {
@@ -293,6 +294,23 @@ function looksLikeEpigraph(lines: string[], words: number): boolean {
 	);
 }
 
+function looksLikeNotes(section: SectionInput): boolean {
+	if (section.backlinksTo.size < 2) return false;
+	const texts = section.blocks.filter(
+		(b): b is RawTextBlock => b.type === "text",
+	);
+	const first = texts.findIndex((b) => b.backlink);
+	if (first < 0) return false;
+	const labelled = texts.filter((b) => b.backlink).length;
+	const chars = (blocks: RawTextBlock[]) =>
+		blocks.reduce((n, b) => n + b.content.length, 0);
+	return (
+		labelled >= 5 &&
+		labelled >= (texts.length - first) * 0.25 &&
+		chars(texts.slice(0, first)) <= chars(texts) * 0.2
+	);
+}
+
 function shapeFitsRole(
 	role: SectionRole,
 	lines: string[],
@@ -391,6 +409,7 @@ export function classifySections(
 		if (looksLikeCopyright(lines[i], words[i])) return "copyright";
 		if (looksLikePraise(lines[i]) || looksLikeBookList(lines[i]))
 			return "promo";
+		if (looksLikeNotes(sections[i])) return "notes";
 		return null;
 	};
 

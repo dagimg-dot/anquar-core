@@ -9,6 +9,7 @@ import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { parseEpub } from "./node.ts";
 import { cardLines, PHONE_LAYOUT, paginate } from "./paginate.ts";
+import { classifySections, type SectionInput } from "./sections.ts";
 import { hardSplit, splitSentences } from "./sentences.ts";
 import type { Block, Card, CardLayout, ParsedBook } from "./types.ts";
 import { collapseRuns, LINE_BREAK, runsText } from "./utils/runs.ts";
@@ -422,6 +423,50 @@ async function run() {
 			"OEBPS/content.opf",
 		);
 		assert(opf.coverId === "art", "an EPUB 3 cover-image item is the cover");
+	}
+
+	title("section roles");
+	{
+		const section = (
+			title: string,
+			html: string,
+			backlinksTo: number[] = [],
+		): SectionInput => ({
+			title,
+			blocks: new DomWalkerBlockExtractor().extract(
+				`<html><body>${html}</body></html>`,
+			),
+			declaredTypes: [],
+			linear: true,
+			imageSizes: [],
+			showsCover: false,
+			backlinksTo: new Set(backlinksTo),
+		});
+		const prose = (n: number) => `<p>${sentence(n, 450)}</p>`;
+		const chapter = (n: number) => section(`Chapter ${n}`, prose(n));
+		const notes = Array.from(
+			{ length: 8 },
+			(_, i) =>
+				`<div><a href="c${i % 2}.xhtml#r${i}">${i + 1}</a><p>${sentence(i, 30)}</p></div>`,
+		).join("");
+		const book = { title: "A Book", author: "An Author" };
+		const lastRole = (last: SectionInput) => {
+			const verdict = classifySections([chapter(1), chapter(2), last], book)[2];
+			return verdict.omit ? verdict.role : "kept";
+		};
+
+		assert(
+			lastRole(section("", notes, [0, 1])) === "notes",
+			"untitled notes numbered with links back into the chapters are left out",
+		);
+		assert(
+			lastRole(section("", notes, [0])) === "kept",
+			"numbers that all link back to one place are not taken for notes",
+		);
+		assert(
+			lastRole(section("Chapter 3", prose(3) + notes, [0, 1])) === "kept",
+			"a chapter ending in its own footnotes stays",
+		);
 	}
 
 	title("pagination");

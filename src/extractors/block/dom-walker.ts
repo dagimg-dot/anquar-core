@@ -8,7 +8,7 @@ import type {
 import { parseCssStyles } from "../../utils/css.ts";
 import { collapseRuns, LINE_BREAK, runsText } from "../../utils/runs.ts";
 import { INVISIBLE } from "../../utils/text.ts";
-import type { BlockExtractor, RawBlock } from "./types.ts";
+import type { BlockExtractor, RawBlock, RawTextBlock } from "./types.ts";
 
 interface WalkNode {
 	nodeType: number;
@@ -99,6 +99,10 @@ const NOTE_MARKER = /^\[?(fn)?\d{1,3}\]?$|^[*†‡§¶]{1,3}$/;
 
 const NOTE_CLASS = /note/i;
 
+const NOTE_LABEL = /^\[?\d{1,3}\]?\.?$/;
+
+const LABEL_TAGS = new Set(["a", "sup", "span"]);
+
 const SKIP_TAGS = new Set([
 	"script",
 	"style",
@@ -166,6 +170,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		let cellAwaitingSeparator = false;
 		let cellHasText = false;
 		let rowDepth = 0;
+		let openingBacklink: string | undefined;
 		const titleCandidates = new Set<number>();
 
 		const pushBreak = () => {
@@ -174,6 +179,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		};
 
 		const flush = () => {
+			const backlink = openingBacklink;
+			openingBacklink = undefined;
 			if (runs.length === 0) return;
 			const collapsed = collapseRuns(runs);
 			const content = runsText(collapsed);
@@ -186,7 +193,9 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				) {
 					titleCandidates.add(blocks.length);
 				}
-				blocks.push({ type: "text", content, runs: collapsed });
+				const block: RawTextBlock = { type: "text", content, runs: collapsed };
+				if (backlink) block.backlink = backlink;
+				blocks.push(block);
 			}
 			runs.length = 0;
 			pendingTag = "";
@@ -221,6 +230,14 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 					c.nodeType === NODE_ELEMENT &&
 					(tagOf(c) === wanted || contains(c, wanted)),
 			);
+
+		const labelLink = (n: WalkNode, tag: string): string | undefined => {
+			if (!LABEL_TAGS.has(tag)) return undefined;
+			const href = (tag === "a" ? n.getAttribute?.("href") : linkIn(n)) ?? "";
+			const [file, fragment] = href.split("#");
+			const numbered = NOTE_LABEL.test(readable(n.textContent).trim());
+			return file && fragment !== undefined && numbered ? href : undefined;
+		};
 
 		const paragraphsIn = (n: WalkNode): number => {
 			let count = 0;
@@ -379,6 +396,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 			const tag = tagOf(n);
 			const before = runs[runs.length - 1]?.text.slice(-1) ?? "";
+			const label = labelLink(n, tag);
+			if (label && !runsText(runs).trim()) openingBacklink = label;
 			if (SKIP_TAGS.has(tag) || isNote(n, tag, before)) return;
 
 			if (tag === "br") {
