@@ -303,6 +303,35 @@ async function run() {
 			scenes.map((b) => b.type).join(",") === "text,break,text,break,text",
 			"rules and ornament lines become scene breaks",
 		);
+
+		const [noted] = extract(
+			'<p>In the footnote.<a epub:type="noteref" href="notes.xhtml#n1">fn1</a> The test<sup><a href="#r2">2</a></sup> ran.</p>',
+		);
+		assert(
+			noted?.type === "text" &&
+				noted.content === "In the footnote. The test ran.",
+			"footnote markers are dropped",
+		);
+
+		const [squared] = extract("<p>x<sup>2</sup> grows</p>");
+		assert(
+			squared?.type === "text" && squared.content === "x2 grows",
+			"a superscript that links nowhere is kept",
+		);
+
+		const [backlink] = extract('<p>Agent 88<a href="index.html#p7">8</a></p>');
+		assert(
+			backlink?.type === "text" && backlink.content === "Agent 888",
+			"a link that continues a number is not a footnote marker",
+		);
+
+		const [glued] = extract(
+			'<p>They felt understood.<a href="notes.xhtml#n10" class="c39">10</a> And</p>',
+		);
+		assert(
+			glued?.type === "text" && glued.content === "They felt understood. And",
+			"a numbered link glued to the sentence before it is a footnote marker",
+		);
 	}
 
 	title("chunking structured blocks");

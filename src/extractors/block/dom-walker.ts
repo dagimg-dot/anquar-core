@@ -79,6 +79,13 @@ const TITLE_MAX_CHARS = 70;
 
 const SCENE_BREAK_ORNAMENT = /^[\s*•·⁂◆◇❖✦✧★☆~#§=_–—-]{1,24}$/u;
 
+const NOTE_TYPES =
+	/\b(noteref|footnote|endnote|rearnote|doc-noteref|doc-footnote|doc-endnote)\b/;
+
+const NOTE_MARKER = /^\[?(fn)?\d{1,3}\]?$|^[*†‡§¶]{1,3}$/;
+
+const NOTE_CLASS = /note/i;
+
 const SKIP_TAGS = new Set([
 	"script",
 	"style",
@@ -181,6 +188,37 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			);
 		};
 
+		const linkIn = (n: WalkNode): string | null | undefined => {
+			for (const c of n.childNodes ?? []) {
+				if (c.nodeType !== NODE_ELEMENT) continue;
+				if (tagOf(c) === "a") return c.getAttribute?.("href");
+				const nested = linkIn(c);
+				if (nested) return nested;
+			}
+			return null;
+		};
+
+		const contains = (n: WalkNode, wanted: string): boolean =>
+			(n.childNodes ?? []).some(
+				(c) =>
+					c.nodeType === NODE_ELEMENT &&
+					(tagOf(c) === wanted || contains(c, wanted)),
+			);
+
+		const isNote = (n: WalkNode, tag: string, before: string): boolean => {
+			const kind = `${n.getAttribute?.("epub:type") ?? ""} ${n.getAttribute?.("role") ?? ""}`;
+			if (NOTE_TYPES.test(kind)) return true;
+			if (tag !== "sup" && tag !== "a") return false;
+			const marker = readable(n.textContent).trim();
+			if (!NOTE_MARKER.test(marker)) return false;
+			const href = tag === "a" ? n.getAttribute?.("href") : linkIn(n);
+			if (!href?.includes("#")) return false;
+			const raised = tag === "sup" || contains(n, "sup");
+			const noteClass = NOTE_CLASS.test(n.getAttribute?.("class") ?? "");
+			const gluedToWord = before !== "" && !/[\s\d]/.test(before);
+			return raised || noteClass || gluedToWord || /^[*†‡§¶]/.test(marker);
+		};
+
 		const computeStyle = (n: WalkNode, inherited: Style): Style => {
 			let { bold, italic } = inherited;
 			const tag = tagOf(n);
@@ -220,7 +258,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				if (n.nodeType !== NODE_ELEMENT) return;
 
 				const tag = tagOf(n);
-				if (SKIP_TAGS.has(tag)) return;
+				const before = collected[collected.length - 1]?.text.slice(-1) ?? "";
+				if (SKIP_TAGS.has(tag) || isNote(n, tag, before)) return;
 				if (tag === "img") {
 					const alt = readable(n.getAttribute?.("alt")).trim();
 					if (alt) imageAlts.push(alt);
@@ -283,7 +322,8 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (n.nodeType !== NODE_ELEMENT) return;
 
 			const tag = tagOf(n);
-			if (SKIP_TAGS.has(tag)) return;
+			const before = runs[runs.length - 1]?.text.slice(-1) ?? "";
+			if (SKIP_TAGS.has(tag) || isNote(n, tag, before)) return;
 
 			if (tag === "br") {
 				runs.push({ text: LINE_BREAK, ...inherited });
