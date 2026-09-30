@@ -171,6 +171,9 @@ const PAGE_REFERENCE =
 
 const SUBENTRY = /^[–—-]/;
 
+const CONTENTS_ENTRY =
+	/^(\d{1,3}[.):]?|[IVXLC]{1,7}[.):]|[IVXLC]{2,7}|chapter|part|book)\s/i;
+
 const DEDICATION =
 	/^(for|to|in (loving )?memory|dedicated|this book is (dedicated|for))\b/i;
 
@@ -379,6 +382,39 @@ function shapeFitsRole(
 	}
 }
 
+function dropContentsList(
+	blocks: RawBlock[],
+	otherTitles: string[],
+): RawBlock[] {
+	const textOf = (block: RawBlock | undefined) =>
+		block?.type === "text" || block?.type === "heading" ? block.content : null;
+	const start = blocks.findIndex((b) => {
+		const text = textOf(b);
+		return text !== null && titleRole(text) === "contents";
+	});
+	if (start < 0) return blocks;
+
+	let end = start + 1;
+	let entries = 0;
+	let previous = "";
+	for (; end < blocks.length; end++) {
+		const text = textOf(blocks[end]);
+		if (text === null) break;
+		const entry =
+			CONTENTS_ENTRY.test(text) || otherTitles.includes(titleKey(text));
+		const wrapped =
+			entries > 0 &&
+			text.length <= 30 &&
+			/^\p{Lu}/u.test(text) &&
+			!/[.!?:;]$/.test(previous);
+		if (!entry && !wrapped) break;
+		if (entry) entries++;
+		previous = text;
+	}
+	if (entries < 3) return blocks;
+	return [...blocks.slice(0, start), ...blocks.slice(end)];
+}
+
 function trimLeadingApparatus(
 	blocks: RawBlock[],
 	book: BookIdentity,
@@ -550,7 +586,10 @@ export function classifySections(
 		const omit = !s.linear || APPARATUS.has(role);
 		const trimmed =
 			!omit && i <= firstCore
-				? trimLeadingApparatus(s.blocks, book, i === firstCore)
+				? dropContentsList(
+						trimLeadingApparatus(s.blocks, book, i === firstCore),
+						otherTitles(i),
+					)
 				: s.blocks;
 		return {
 			role,

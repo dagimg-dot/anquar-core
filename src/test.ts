@@ -507,6 +507,33 @@ async function run() {
 			!epilogue.omit && index.omit,
 			"a short epilogue just before the index stays",
 		);
+
+		const [opening] = classifySections(
+			[
+				section(
+					"",
+					asLines([
+						"For Nadia",
+						"Contents",
+						"01 The End and the Beginning",
+						"02 Agent 888",
+						"03 Elie’s Friend Becomes President of",
+						"Syria",
+						"“Against the Arab you have to attack.”",
+					]),
+				),
+				chapter(1),
+				chapter(2),
+			],
+			book,
+		);
+		assert(
+			same(opening.keptBlocks.map(blockText), [
+				"For Nadia",
+				"“Against the Arab you have to attack.”",
+			]),
+			"a contents list inside a front section is dropped",
+		);
 	}
 
 	title("print lines");
