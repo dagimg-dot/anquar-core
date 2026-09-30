@@ -18,6 +18,10 @@ const SECTION_NUMBER = /^([0-9]{1,3}|[IVXLC]{1,7})\.?$/;
 
 const PARAGRAPH_END = /[.!?…:;"”’')\]—–-]$/;
 
+const FULL_LINE_SHARE = 0.7;
+
+const ENTRY_NUMBER = /^(\d{1,3}[.):]?|[IVXLC]{1,7}[.):]|[IVXLC]{2,7})\s/;
+
 function wordsOf(text: string): string[] {
 	return text
 		.normalize("NFKD")
@@ -96,6 +100,10 @@ function openWithTitle(title: string, blocks: RawBlock[]): RawBlock[] {
 	];
 }
 
+function shouts(line: string): boolean {
+	return /\p{L}/u.test(line) && line === line.toUpperCase();
+}
+
 function rejoinPrintLines(blocks: RawBlock[]): RawBlock[] {
 	const lines = blocks.filter(
 		(b): b is RawTextBlock => b.type === "text" && b.content.length >= 25,
@@ -115,15 +123,23 @@ function rejoinPrintLines(blocks: RawBlock[]): RawBlock[] {
 	const readsAsVerse = continuedInLowercase.length < unfinished.length * 0.3;
 	if (readsAsVerse) return blocks;
 
+	const widths = unfinished.map((b) => b.content.length).sort((a, b) => a - b);
+	const fullLine = widths[Math.floor(widths.length / 2)] * FULL_LINE_SHARE;
+
 	const out: RawBlock[] = [];
+	let lastLine = "";
 	for (const block of blocks) {
 		const prev = out[out.length - 1];
-		if (
+		const carriesOn =
 			block.type === "text" &&
 			prev?.type === "text" &&
-			!PARAGRAPH_END.test(prev.content) &&
-			!/^[—–―"“‘]/.test(block.content)
-		) {
+			!PARAGRAPH_END.test(lastLine) &&
+			lastLine.length >= fullLine &&
+			!/^[—–―"“‘]/.test(block.content) &&
+			!ENTRY_NUMBER.test(block.content) &&
+			(shouts(block.content) || !shouts(lastLine));
+		lastLine = block.type === "text" ? block.content : "";
+		if (carriesOn) {
 			out[out.length - 1] = {
 				type: "text",
 				content: `${prev.content} ${block.content}`,

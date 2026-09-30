@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { blockText, materializeBlocks } from "./blocks.ts";
+import { cleanupSections } from "./cleanup.ts";
 import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
@@ -505,6 +506,54 @@ async function run() {
 		assert(
 			!epilogue.omit && index.omit,
 			"a short epilogue just before the index stays",
+		);
+	}
+
+	title("print lines");
+	{
+		const printed = [
+			"I knew, something inside of me whispered, that the",
+			"day my husband would become a public personality",
+			"was rapidly approaching.",
+			"I said good-bye to him in the last days of",
+			"November, 1964, with a clear feeling that this would",
+			"be our last meeting, and I was not surprised.",
+			"STEIMATZKY, CITRUS HOUSE, TEL-AVIV",
+			"This book is dedicated to the memory of a man",
+			"of great accomplishment, no longer with us.",
+			"Contents",
+			"01 The End and the Beginning",
+			"02 Agent 888",
+			"08 Entertaining the Syrian Top Brass",
+			"09 Elie’s Friend Becomes President of",
+		];
+		const [joined] = cleanupSections(
+			[
+				{
+					title: "",
+					blocks: new DomWalkerBlockExtractor().extract(
+						`<html><body>${printed.map((l) => `<p>${l}</p>`).join("")}</body></html>`,
+					),
+					imageBytes: () => null,
+				},
+			],
+			null,
+		);
+		const texts = joined.map((b) => (b.type === "text" ? b.content : ""));
+		assert(
+			texts.includes(
+				"I knew, something inside of me whispered, that the day my husband would become a public personality was rapidly approaching.",
+			),
+			"lines broken at the printed width join back into their paragraph",
+		);
+		assert(
+			texts.includes("02 Agent 888") &&
+				texts.includes("08 Entertaining the Syrian Top Brass"),
+			"short lines and numbered entries are not run together",
+		);
+		assert(
+			texts.includes("STEIMATZKY, CITRUS HOUSE, TEL-AVIV"),
+			"a line in capitals does not run into the text after it",
 		);
 	}
 
