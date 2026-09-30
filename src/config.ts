@@ -15,6 +15,7 @@ export interface ParseOptions {
 	titleExtractor: TitleExtractor;
 	imageResolver: ImageResolver;
 	blockExtractor: BlockExtractor;
+	keepApparatus: boolean;
 	debug: boolean;
 }
 
@@ -36,5 +37,6 @@ export const DEFAULT_PARSE_OPTIONS: ParseOptions = {
 	titleExtractor: DEFAULT_TITLE_EXTRACTOR,
 	imageResolver: DEFAULT_IMAGE_RESOLVER,
 	blockExtractor: DEFAULT_BLOCK_EXTRACTOR,
+	keepApparatus: false,
 	debug: false,
 };

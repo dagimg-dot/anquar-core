@@ -68,7 +68,12 @@ export function cleanupSections(
 				(imageCounts.get(imageKey(section, block.src)) ?? 0) < ORNAMENT_REPEATS
 			);
 		});
-		const numbered = kept.map(
+		const trimmed = kept.filter(
+			(block, i) =>
+				block.type !== "break" ||
+				(i > 0 && i < kept.length - 1 && kept[i - 1].type !== "break"),
+		);
+		const numbered = trimmed.map(
 			(block): RawBlock =>
 				block.type === "text" && SECTION_NUMBER.test(block.content)
 					? {

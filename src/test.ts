@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { materializeBlocks } from "./blocks.ts";
+import { blockText, materializeBlocks } from "./blocks.ts";
 import { chunkBlocks, chunkBook } from "./chunker.ts";
 import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
@@ -36,6 +36,9 @@ const same = (a: unknown, b: unknown) =>
 function title(name: string) {
 	console.log(`\n── ${name} ──`);
 }
+
+const APPARATUS_TEXT =
+	/all rights reserved|\bisbn\b|library of congress|oceanofpdf/i;
 
 async function run() {
 	const args = process.argv.slice(2);
@@ -444,13 +447,15 @@ async function run() {
 	title("chapter headers");
 	{
 		const config = { ...DEFAULT_CHUNK_CONFIG };
-		const chapterWith = (html: string) => ({
+		const chapterWith = (html: string): ParsedBook => ({
 			title: "Preface",
 			author: "",
+			omitted: [],
 			chapters: [
 				{
 					index: 0,
 					title: "Preface",
+					role: "body",
 					frontMatter: false,
 					blocks: materializeBlocks(
 						new DomWalkerBlockExtractor().extract(
@@ -520,6 +525,14 @@ async function run() {
 			assert(!!book.author, `${name}: has author`);
 			assert(book.chapters.length > 0, `${name}: has chapters`);
 
+			for (const omitted of book.omitted) {
+				assert(
+					omitted.words <= 1500 ||
+						["notes", "index", "contents"].includes(omitted.role),
+					`${name}: nothing long is dropped as ${omitted.role} ("${omitted.title}", ${omitted.words} words)`,
+				);
+			}
+
 			for (const ch of book.chapters) {
 				assert(ch.index >= 0, `${name}: chapter ${ch.index} has valid index`);
 				assert(
@@ -587,6 +600,12 @@ async function run() {
 				);
 				assert(b.charCount > 0, `${name}: chunk non-empty`);
 			}
+
+			const opening = blocks.slice(0, 3).map(blockText).join(" ");
+			assert(
+				!APPARATUS_TEXT.test(opening),
+				`${name}: the feed does not open on copyright or watermarks`,
+			);
 
 			for (const b of blocks) {
 				if (b.type !== "list") continue;

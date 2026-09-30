@@ -3,7 +3,7 @@
 import { chunkBook } from "./chunker.ts";
 import type { ParseOptions } from "./config.ts";
 import { parseEpub } from "./node.ts";
-import type { Block, ChunkConfig } from "./types.ts";
+import type { Block, ChunkConfig, ParsedBook } from "./types.ts";
 import { DEFAULT_CHUNK_CONFIG } from "./types.ts";
 
 const BLOCK_PREVIEW_MAX = 140;
@@ -23,6 +23,7 @@ OPTIONS
   --max-chars <number>   Max chars per chunk  (default: ${DEFAULT_CHUNK_CONFIG.maxChars})
   --no-headers           Omit chapter headers
   --sample <number>      Show first N blocks then stop  (default: all)
+  --all                  Keep covers, copyright, contents, notes and indexes
   --debug                Print extractor tracing to stderr
 `);
 }
@@ -66,6 +67,19 @@ function formatBlock(b: Block, idx: number, total: number): void {
 	}
 }
 
+function printSections(book: ParsedBook): void {
+	console.log("── sections ──");
+	for (const ch of book.chapters) {
+		const mark = ch.frontMatter ? "front" : "     ";
+		console.log(`  ${mark} ${ch.role.padEnd(10)} ${ch.title || "(untitled)"}`);
+	}
+	for (const s of book.omitted) {
+		console.log(
+			`  omit  ${s.role.padEnd(10)} ${s.title || "(untitled)"}  (${s.words} words)`,
+		);
+	}
+}
+
 async function cmdParse(
 	filePath: string,
 	config: ChunkConfig,
@@ -81,6 +95,8 @@ async function cmdParse(
 	console.error(
 		`  ${book.chapters.length} chapters → ${blocks.length} blocks\n`,
 	);
+
+	printSections(book);
 
 	if (statsOnly) {
 		printStats(blocks, book.chapters.length);
@@ -158,6 +174,10 @@ async function main(): Promise<void> {
 	const positional = args.filter((a) => {
 		if (a === "--no-headers") {
 			config.includeChapterHeaders = false;
+			return false;
+		}
+		if (a === "--all") {
+			parseOptions.keepApparatus = true;
 			return false;
 		}
 		if (a === "--debug") {

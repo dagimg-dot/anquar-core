@@ -7,10 +7,21 @@ export interface OpfItem {
 	properties: string;
 }
 
+export interface SpineItem {
+	idref: string;
+	linear: boolean;
+}
+
+export interface GuideReference {
+	type: string;
+	href: string;
+}
+
 export interface ParsedOpf {
 	opfDir: string;
 	manifest: Map<string, OpfItem>;
-	spine: { idref: string }[];
+	spine: SpineItem[];
+	guide: GuideReference[];
 	title: string;
 	author: string;
 	coverId: string;
@@ -24,7 +35,8 @@ function localName(el: Element): string {
 
 export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 	const manifest = new Map<string, OpfItem>();
-	const spine: { idref: string }[] = [];
+	const spine: SpineItem[] = [];
+	const guide: GuideReference[] = [];
 	const opfDir = opfPath.includes("/")
 		? `${opfPath.replace(/\/[^/]+$/, "")}/`
 		: "";
@@ -37,6 +49,7 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 			opfDir,
 			manifest,
 			spine,
+			guide,
 			title: "Unknown",
 			author: "Unknown",
 			coverId: "",
@@ -87,7 +100,15 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 			}
 			case "itemref": {
 				const idref = el.getAttribute("idref");
-				if (idref) spine.push({ idref });
+				if (idref) {
+					spine.push({ idref, linear: el.getAttribute("linear") !== "no" });
+				}
+				break;
+			}
+			case "reference": {
+				const type = (el.getAttribute("type") || "").toLowerCase();
+				const href = (el.getAttribute("href") || "").split("#")[0];
+				if (type && href) guide.push({ type, href });
 				break;
 			}
 		}
@@ -105,5 +126,5 @@ export function parseOpf(opfXml: string, opfPath: string): ParsedOpf {
 			)?.id ?? "";
 	}
 
-	return { opfDir, manifest, spine, title, author, coverId };
+	return { opfDir, manifest, spine, guide, title, author, coverId };
 }

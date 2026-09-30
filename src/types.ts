@@ -69,11 +69,32 @@ export function isProseBlock(block: Block): block is ProseBlock {
 	return block.type === "text" || block.type === "heading";
 }
 
+export type SectionRole =
+	| "cover"
+	| "titlepage"
+	| "copyright"
+	| "contents"
+	| "promo"
+	| "notes"
+	| "index"
+	| "dedication"
+	| "epigraph"
+	| "preface"
+	| "body"
+	| "backmatter";
+
 export interface ParsedChapter {
 	index: number;
 	title: string;
+	role: SectionRole;
 	blocks: Block[];
 	frontMatter: boolean;
+}
+
+export interface OmittedSection {
+	title: string;
+	role: SectionRole;
+	words: number;
 }
 
 export interface ParsedBook {
@@ -81,6 +102,7 @@ export interface ParsedBook {
 	author: string;
 	chapters: ParsedChapter[];
 	coverImage?: Uint8Array | null;
+	omitted: OmittedSection[];
 }
 
 export interface ParsedArticle {

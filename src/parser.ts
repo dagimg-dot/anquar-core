@@ -1,28 +1,28 @@
-import { blockText, materializeBlocks } from "./blocks.ts";
+import { materializeBlocks, wordCount } from "./blocks.ts";
 import { cleanupSections } from "./cleanup.ts";
 import type { ParseOptions } from "./config.ts";
 import { DEFAULT_PARSE_OPTIONS } from "./config.ts";
 import { getOpfPath } from "./epub/container.ts";
 import { parseOpf } from "./epub/opf.ts";
+import { readLandmarks, typesDeclaredAboveText } from "./epub/semantics.ts";
 import type { JSZipLike } from "./epub/zip.ts";
 import { EpubZip } from "./epub/zip.ts";
 import type { TitleExtractorParams } from "./extractors/title/types.ts";
-import type { ParsedBook, ParsedChapter, StyleMapping } from "./types.ts";
+import {
+	classifySections,
+	READING_START_TYPES,
+	type SectionInput,
+} from "./sections.ts";
+import type {
+	OmittedSection,
+	ParsedBook,
+	ParsedChapter,
+	StyleMapping,
+} from "./types.ts";
 import { parseCssStyles } from "./utils/css.ts";
 import { decodeEntities } from "./utils/entities.ts";
+import { imageSize } from "./utils/image-size.ts";
 import { INVISIBLE } from "./utils/text.ts";
-
-const FRONT_MATTER_TITLE =
-	/^(cover|title\s*page|titlepage|half[\s-]?title|copyright|imprint|colophon|contents|table of contents|toc|dedication|epigraph|acknowledge?ments?|about the author|about the publisher|advance praise|praise for|also by|by the same author|other books by|front\s?matter|newsletter)\b/i;
-
-const BOILERPLATE =
-	/all rights reserved|isbn|library of congress|catalogue record|first published|published by|copyright ©|©\s*\d{4}/gi;
-
-const BODY_MIN_WORDS = 150;
-
-const MAX_FRONT_MATTER_SHARE = 0.25;
-
-const MIN_FRONT_MATTER_SCAN = 6;
 
 const RECORD_ID_AS_TITLE =
 	/^([0-9a-f]{16,}|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}|unknown)$/i;
@@ -42,52 +42,12 @@ function titleFromFileName(name: string): string {
 	return words.replace(/\s+/g, " ").trim();
 }
 
-function chapterWordCount(chapter: ParsedChapter): number {
-	let words = 0;
-	for (const block of chapter.blocks) {
-		const text = blockText(block).trim();
-		if (text) words += text.split(/\s+/).length;
-	}
-	return words;
-}
-
-function looksLikeFrontMatter(
-	chapter: ParsedChapter,
-	bookTitle: string,
-	wordCount: number,
-): boolean {
-	const title = chapter.title.replace(/[:\-–—].*$/, "").trim();
-	if (title && FRONT_MATTER_TITLE.test(title)) return true;
-	if (title && title === bookTitle) return true;
-	if (wordCount === 0) return true;
-
-	const opening = blockText(chapter.blocks[0] ?? ({} as never)).trim();
-	if (/^(table of )?contents\b/i.test(opening)) return true;
-	if (opening && opening.toLowerCase() === bookTitle.toLowerCase()) return true;
-
-	const text = chapter.blocks.map(blockText).join(" ");
-	return (text.match(BOILERPLATE) ?? []).length >= 2;
-}
-
-function markFrontMatter(chapters: ParsedChapter[], bookTitle: string): void {
-	const limit = Math.min(
-		chapters.length,
-		Math.max(
-			MIN_FRONT_MATTER_SCAN,
-			Math.ceil(chapters.length * MAX_FRONT_MATTER_SHARE),
-		),
-	);
-
-	for (let i = 0; i < limit; i++) {
-		const chapter = chapters[i];
-		const words = chapterWordCount(chapter);
-
-		if (looksLikeFrontMatter(chapter, bookTitle, words)) {
-			chapter.frontMatter = true;
-			continue;
-		}
-		if (words >= BODY_MIN_WORDS) return;
-		chapter.frontMatter = true;
+function hrefKey(href: string): string {
+	const key = href.replace(/^\.\//, "");
+	try {
+		return decodeURIComponent(key);
+	} catch {
+		return key;
 	}
 }
 
@@ -126,13 +86,14 @@ export async function parseEpubFromZip(
 		? zip.readBinary(zip.resolvePath(opf.opfDir, coverItem.href))
 		: null;
 
-	const docs: { href: string; path: string; html: string }[] = [];
-	for (const { idref } of opf.spine) {
+	const docs: { href: string; path: string; html: string; linear: boolean }[] =
+		[];
+	for (const { idref, linear } of opf.spine) {
 		const item = opf.manifest.get(idref);
 		if (!item?.mediaType.includes("html")) continue;
 		const path = zip.resolvePath(opf.opfDir, item.href);
 		const html = zip.readText(path);
-		if (html) docs.push({ href: item.href, path, html });
+		if (html) docs.push({ href: item.href, path, html, linear });
 	}
 
 	const cssMap = new Map<string, StyleMapping>();
@@ -158,6 +119,13 @@ export async function parseEpubFromZip(
 		}
 	}
 
+	const hints = new Map<string, string[]>();
+	for (const ref of [...opf.guide, ...readLandmarks(zip, opf)]) {
+		if (READING_START_TYPES.has(ref.type)) continue;
+		const key = hrefKey(ref.href);
+		hints.set(key, [...(hints.get(key) ?? []), ref.type]);
+	}
+
 	const imageCache = new Map<string, Uint8Array | null>();
 	const resolveImage = (src: string, xhtmlPath: string) => {
 		const key = `${xhtmlPath}\n${src}`;
@@ -171,34 +139,73 @@ export async function parseEpubFromZip(
 		return imageCache.get(key) ?? null;
 	};
 
+	const sections: SectionInput[] = docs.map((doc) => {
+		const blocks = options.blockExtractor.extract(doc.html, cssMap);
+		const images = blocks.flatMap((b) =>
+			b.type === "image" ? [resolveImage(b.src, doc.path)] : [],
+		);
+		return {
+			title: cleanTitle(titleMap.get(doc.href) ?? ""),
+			blocks,
+			declaredTypes: [
+				...typesDeclaredAboveText(doc.html),
+				...(hints.get(hrefKey(doc.href)) ?? []),
+			],
+			linear: doc.linear,
+			imageSizes: images.map((bytes) => (bytes ? imageSize(bytes) : null)),
+			showsCover: coverImage !== null && images.includes(coverImage),
+		};
+	});
+
+	const verdicts = classifySections(sections, { title, author });
+
+	const kept: number[] = [];
+	const omitted: OmittedSection[] = [];
+	sections.forEach((section, i) => {
+		const verdict = verdicts[i];
+		if (!verdict.omit || options.keepApparatus) {
+			kept.push(i);
+		} else if (section.blocks.length > 0) {
+			omitted.push({
+				title: section.title,
+				role: verdict.role,
+				words: wordCount(section.blocks),
+			});
+		}
+		if (options.debug) {
+			const mark = verdict.omit
+				? "omit"
+				: verdict.frontMatter
+					? "front"
+					: "keep";
+			console.error(
+				`[section] ${i} ${mark} ${verdict.role} "${section.title}"`,
+			);
+		}
+	});
+
 	const cleaned = cleanupSections(
-		docs.map((doc) => ({
-			blocks: options.blockExtractor.extract(doc.html, cssMap),
-			imageBytes: (src: string) => resolveImage(src, doc.path),
+		kept.map((i) => ({
+			blocks: verdicts[i].keptBlocks,
+			imageBytes: (src: string) => resolveImage(src, docs[i].path),
 		})),
 		coverImage,
 	);
 
 	const chapters: ParsedChapter[] = [];
-	docs.forEach((doc, i) => {
-		if (cleaned[i].length === 0) return;
+	kept.forEach((i, k) => {
+		if (cleaned[k].length === 0) return;
 		const index = chapters.length;
 		chapters.push({
 			index,
-			title: cleanTitle(titleMap.get(doc.href) ?? ""),
-			blocks: materializeBlocks(cleaned[i], index, `c${index}-`, (src) =>
-				resolveImage(src, doc.path),
+			title: sections[i].title,
+			role: verdicts[i].role,
+			frontMatter: verdicts[i].frontMatter,
+			blocks: materializeBlocks(cleaned[k], index, `c${index}-`, (src) =>
+				resolveImage(src, docs[i].path),
 			),
-			frontMatter: false,
 		});
 	});
 
-	markFrontMatter(chapters, title);
-
-	return {
-		title,
-		author,
-		chapters,
-		coverImage,
-	};
+	return { title, author, chapters, coverImage, omitted };
 }

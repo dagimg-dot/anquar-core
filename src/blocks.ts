@@ -26,6 +26,15 @@ export function blockText(block: Block | RawBlock): string {
 	}
 }
 
+export function wordCount(blocks: readonly (Block | RawBlock)[]): number {
+	let words = 0;
+	for (const block of blocks) {
+		const text = blockText(block).trim();
+		if (text) words += text.split(/\s+/).length;
+	}
+	return words;
+}
+
 function toBlock(
 	raw: RawBlock,
 	common: BlockIdentity,

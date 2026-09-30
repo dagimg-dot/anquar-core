@@ -1,4 +1,4 @@
-export { blockText, listCharCount } from "./blocks.ts";
+export { blockText, listCharCount, wordCount } from "./blocks.ts";
 export { chunkBlocks, chunkBook } from "./chunker.ts";
 export type { ParseOptions } from "./config.ts";
 export { EpubZip } from "./epub/zip.ts";
@@ -15,10 +15,12 @@ export type {
 	ImageBlock,
 	ListBlock,
 	ListItem,
+	OmittedSection,
 	ParsedArticle,
 	ParsedBook,
 	ParsedChapter,
 	ProseBlock,
+	SectionRole,
 	StyleMapping,
 	StyleRun,
 	TextBlock,
