@@ -16,11 +16,6 @@ export interface ArticleOptions {
 const DEFAULT_USER_AGENT =
 	"Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36";
 
-/**
- * Accepts either:
- *   - A URL string (fetched and parsed live)
- *   - An object with raw HTML + optional metadata overrides
- */
 export async function parseArticle(
 	input:
 		| string
@@ -62,7 +57,6 @@ export async function parseArticle(
 		);
 	}
 
-	// Strip subscription forms and boilerplate, then wrap for the DOM walker.
 	const cleaned = cleanupArticle(article.content);
 	const extractor = new DomWalkerBlockExtractor();
 	const rawBlocks = extractor.extract(asFullHtml(cleaned), new Map());

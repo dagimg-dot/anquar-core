@@ -5,10 +5,6 @@ import type {
 	StyleRun,
 } from "../../types.ts";
 
-/**
- * Raw blocks extracted from XHTML — before chapter assignment,
- * id generation and image binary resolution.
- */
 export interface RawTextBlock {
 	type: "text";
 	content: string;
@@ -40,7 +36,6 @@ export type RawBlock =
 	| RawListBlock
 	| RawImageBlock;
 
-/** Walks an XHTML DOM and returns its blocks in document order. */
 export interface BlockExtractor {
 	readonly name: string;
 	extract(html: string, cssMap?: Map<string, StyleMapping>): RawBlock[];

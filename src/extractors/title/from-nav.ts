@@ -2,13 +2,6 @@ import { parseHTML } from "linkedom";
 import { normalizeTitleKey } from "../../utils/path.ts";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
-/**
- * Extract chapter titles from the EPUB3 nav.xhtml file.
- *
- * EPUB3 uses an XHTML navigation document with <nav epub:type="toc">
- * as the canonical table of contents. This is often richer than the
- * legacy NCX (more entries, better titles).
- */
 export class NavTitleExtractor implements TitleExtractor {
 	readonly name = "nav";
 
@@ -28,7 +21,6 @@ export class NavTitleExtractor implements TitleExtractor {
 			return titles;
 		}
 
-		// Find <nav epub:type="toc"> — the canonical TOC
 		const allNavs = doc.querySelectorAll("nav");
 		let tocNav: Element | null = null;
 		for (const nav of allNavs) {

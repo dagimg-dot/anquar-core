@@ -11,18 +11,10 @@ import { NcxTitleExtractor } from "./extractors/title/from-ncx.ts";
 import { TitleTagExtractor } from "./extractors/title/from-title.ts";
 import type { TitleExtractor } from "./extractors/title/types.ts";
 
-/**
- * Pluggable strategy selection for EPUB parsing.
- * Every field has a safe default — you only override what you want.
- */
 export interface ParseOptions {
-	/** How to extract chapter titles from XHTML documents. */
 	titleExtractor: TitleExtractor;
-	/** How to resolve <img src> attributes to binary bytes. */
 	imageResolver: ImageResolver;
-	/** How to walk XHTML DOM to extract text + image segments. */
 	blockExtractor: BlockExtractor;
-	/** Print extractor provenance to stderr. */
 	debug: boolean;
 }
 

@@ -2,10 +2,6 @@ import { parseNcx } from "../../epub/ncx.ts";
 import { normalizeTitleKey } from "../../utils/path.ts";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
-/**
- * Find the NCX file path from the OPF manifest.
- * Falls back to common paths if not found in manifest.
- */
 function findNcxPath(params: TitleExtractorParams): string | null {
 	for (const item of params.opf.manifest.values()) {
 		if (item.mediaType === "application/x-dtbncx+xml") {
@@ -18,14 +14,6 @@ function findNcxPath(params: TitleExtractorParams): string | null {
 	return null;
 }
 
-/**
- * Extract chapter titles from the EPUB2 NCX (Navigation Control XML).
- *
- * This is the most reliable source for EPUB2 books — publishers
- * are required to include an NCX with proper chapter titles.
- *
- * Keys are normalised to match manifest hrefs (relative to OPF dir).
- */
 export class NcxTitleExtractor implements TitleExtractor {
 	readonly name = "ncx";
 

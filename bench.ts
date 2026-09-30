@@ -1,11 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Benchmarks the actual CLI on all sample EPUBs.
- * Runs `anquar parse <file.epub> --stats` as a subprocess and times it.
- * This includes Bun's startup time, parsing, chunking, and stats generation.
- *
- * Usage: bun run bench.ts
- */
 
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -41,7 +34,6 @@ for (const file of files) {
 	const _stdout = proc.stdout.toString();
 	const stderr = proc.stderr.toString();
 
-	// Parse chapters and blocks from stderr (tracing goes to stderr)
 	const chapMatch = stderr.match(/(\d+) chapters? → (\d+) blocks?/);
 	const chaps = chapMatch?.[1] ?? "?";
 	const blocks = parseInt(chapMatch?.[2] ?? "0", 10);

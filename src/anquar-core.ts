@@ -6,12 +6,10 @@ export {
 	splitSentences,
 } from "./chunker.ts";
 export type { ParseOptions } from "./config.ts";
-// ZIP reader (Node via AdmZip, browser via JSZip)
 export { EpubZip } from "./epub/zip.ts";
 export type { ArticleOptions } from "./everything/article.ts";
 
 export { parseArticle } from "./everything/article.ts";
-// parseEpub (path-based) lives in ./node.ts — it is Node-only.
 export { parseEpubFromFile, parseEpubFromZip } from "./parser.ts";
 export type {
 	Block,

@@ -11,21 +11,16 @@ import type { ParsedBook, ParsedChapter, StyleMapping } from "./types.ts";
 import { parseCssStyles } from "./utils/css.ts";
 import { decodeEntities } from "./utils/entities.ts";
 
-/** Titles that indicate a chapter is front matter (not actual content). */
 const FRONT_MATTER_TITLE =
 	/^(cover|title\s*page|titlepage|half[\s-]?title|copyright|imprint|colophon|contents|table of contents|toc|dedication|epigraph|acknowledge?ments?|about the author|about the publisher|advance praise|praise for|also by|by the same author|other books by|front\s?matter|newsletter)\b/i;
 
-/** Rights-page phrasing. One line is a passing mention; several is the page. */
 const BOILERPLATE =
 	/all rights reserved|isbn|library of congress|catalogue record|first published|published by|copyright ©|©\s*\d{4}/gi;
 
-/** Words below which a chapter is too slight to be where the book begins. */
 const BODY_MIN_WORDS = 150;
 
-/** Never treat more than this much of a book as front matter. */
 const MAX_FRONT_MATTER_SHARE = 0.25;
 
-/** …but always look at least this far, since short books front-load the same pages. */
 const MIN_FRONT_MATTER_SCAN = 6;
 
 function chapterWordCount(chapter: ParsedChapter): number {
@@ -47,8 +42,6 @@ function looksLikeFrontMatter(
 	if (title && title === bookTitle) return true;
 	if (wordCount === 0) return true;
 
-	// An untitled page still announces itself: a table of contents opens with
-	// the word, and a title page opens by repeating the book's name.
 	const opening = blockText(chapter.blocks[0] ?? ({} as never)).trim();
 	if (/^(table of )?contents\b/i.test(opening)) return true;
 	if (opening && opening.toLowerCase() === bookTitle.toLowerCase()) return true;
@@ -57,11 +50,6 @@ function looksLikeFrontMatter(
 	return (text.match(BOILERPLATE) ?? []).length >= 2;
 }
 
-/**
- * Front matter sits in one run at the front of a book, so walk forward and stop
- * at the first chapter substantial enough to be where reading starts. Marking
- * only a prefix means a mid-book acknowledgements page is never mistaken for it.
- */
 function markFrontMatter(chapters: ParsedChapter[], bookTitle: string): void {
 	const limit = Math.min(
 		chapters.length,
@@ -84,14 +72,6 @@ function markFrontMatter(chapters: ParsedChapter[], bookTitle: string): void {
 	}
 }
 
-/**
- * Parse an EPUB from a browser File object using JSZip.
- * JSZip must be passed in (it's a peer dependency, not bundled).
- *
- * @example
- *   import JSZip from "jszip";
- *   const book = await parseEpubFromFile(file, JSZip);
- */
 export async function parseEpubFromFile(
 	file: File,
 	JSZip: { loadAsync(data: File): Promise<JSZipLike> },
@@ -101,7 +81,6 @@ export async function parseEpubFromFile(
 	return parseEpubFromZip(zip, options as ParseOptions | undefined);
 }
 
-/** The shared core — both runtime entry points open a zip and hand it here. */
 export async function parseEpubFromZip(
 	zip: EpubZip,
 	opts?: ParseOptions,
@@ -138,9 +117,7 @@ export async function parseEpubFromZip(
 				break;
 			}
 		}
-	} catch {
-		// Cover image is optional — silently skip if not found
-	}
+	} catch {}
 
 	const xhtmlFiles = new Map<string, string>();
 	const spineMap: { href: string; itemId: string }[] = [];

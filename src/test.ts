@@ -1,13 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Test harness — runs parser + chunker tests against
- * EPUBs in sample_epubs/ and articles in sample_urls/list.json.
- *
- * Usage:
- *   bun test              → all (epub + article)
- *   bun test --epub       → EPUBs only
- *   bun test --article    → articles only
- */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

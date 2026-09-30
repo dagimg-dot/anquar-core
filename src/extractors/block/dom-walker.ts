@@ -9,11 +9,6 @@ import { parseCssStyles } from "../../utils/css.ts";
 import { collapseRuns, normalizeRuns, runsText } from "../../utils/runs.ts";
 import type { BlockExtractor, RawBlock } from "./types.ts";
 
-/**
- * Minimal node shape used by the DOM walker.
- * linkedom returns objects that duck-type to this interface —
- * using DOM's built-in types would create incompatibilities.
- */
 interface WalkNode {
 	nodeType: number;
 	tagName?: string;
@@ -27,7 +22,6 @@ interface Style {
 	italic: boolean;
 }
 
-/** A list found while gathering inline content, with the style in force there. */
 interface DeferredList extends Style {
 	node: WalkNode;
 }
@@ -40,13 +34,8 @@ interface InlineScan {
 const NODE_ELEMENT = 1;
 const NODE_TEXT = 3;
 
-/**
- * Books converted from PDF map symbol fonts into the Unicode private use area,
- * where every normal font draws them as a tofu box.
- */
 const PRIVATE_USE = /\p{Co}/gu;
 
-/** Soft hyphens and zero-width marks: invisible, but they inflate every count. */
 const INVISIBLE = /[\u00AD\u200B-\u200D\uFEFF]/g;
 
 function readable(raw: string | null | undefined): string {
@@ -78,22 +67,14 @@ const BLOCK_TAGS = new Set([
 	"pre",
 ]);
 
-/** Elements whose bold-only text may stand in for a heading. */
 const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
 
 const TITLE_MAX_CHARS = 70;
 
-/**
- * A short paragraph set wholly in bold is a section title the publisher never
- * marked up as a heading — routine in scanned and converted books. Trailing
- * sentence punctuation rules out a bold opening line of prose.
- */
 function readsAsTitle(runs: StyleRun[], text: string): boolean {
 	if (text.length < 2 || text.length > TITLE_MAX_CHARS) return false;
 	if (/[.!?;:,]$/.test(text)) return false;
 	if (!/[\p{L}\p{N}]/u.test(text)) return false;
-	// A lowercase or dash-led opening marks a wrapped line or an attribution,
-	// not a title.
 	if (!/^[\p{Lu}\p{N}"'“‘([]/u.test(text)) return false;
 	return runs.every((r) => r.bold || !r.text.trim());
 }
@@ -107,24 +88,6 @@ const SKIP_TAGS = new Set([
 	"link",
 ]);
 
-/**
- * DOM-walking block extractor with bold/italic tracking.
- *
- * Walks the parsed XHTML body tree and emits paragraphs, headings,
- * lists and images in document order. Text is emitted as StyleRun[]
- * with computed bold/italic flags from:
- *   1. Semantic HTML tags (<strong>, <b>, <em>, <i>)
- *   2. Inline style attributes (font-weight, font-style)
- *   3. CSS class names resolved against a pre-parsed map
- *
- * Handles nested/inherited styling — style flags propagate
- * through the DOM tree via the recursive walker.
- */
-/**
- * A title introduces prose, and that prose opens a sentence. Requiring both
- * leaves runs of bold lines (blurbs, title pages) and bold text wrapped across
- * lines as the body text they are.
- */
 function promoteTitles(blocks: RawBlock[], candidates: Set<number>): void {
 	for (const i of candidates) {
 		const next = blocks[i + 1];
@@ -151,12 +114,11 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		const body = doc.querySelector("body");
 		if (!body) return [];
 
-		// Build CSS class map: merge external (from parser) with inline <style>
 		const cssMap = new Map(externalCss);
 		for (const st of doc.querySelectorAll("style")) {
 			const parsed = parseCssStyles(st.textContent || "");
 			for (const [k, v] of parsed) {
-				if (!cssMap.has(k)) cssMap.set(k, v); // inline wins over external
+				if (!cssMap.has(k)) cssMap.set(k, v);
 			}
 		}
 
@@ -165,8 +127,6 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 		const tagOf = (n: WalkNode): string => (n.tagName || "").toLowerCase();
 
-		// The element the pending runs came from, so flush can tell a bold
-		// paragraph apart from a bold table cell.
 		let pendingTag = "";
 		const titleCandidates = new Set<number>();
 
@@ -225,11 +185,6 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			return { bold, italic };
 		};
 
-		/**
-		 * Gather the inline content of a subtree without touching the block
-		 * stream. Nested lists are set aside rather than flattened into the
-		 * text, so the caller can emit them as their own items.
-		 */
 		const scanInline = (parent: WalkNode, inherited: Style): InlineScan => {
 			const collected: StyleRun[] = [];
 			const lists: DeferredList[] = [];
@@ -273,7 +228,6 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				const tag = tagOf(child);
 				const style = computeStyle(child, inherited);
 
-				// A list nested directly under <ul>/<ol>, with no <li> of its own.
 				if (LIST_TAGS.has(tag)) {
 					gatherItems(child, style, depth + 1, out);
 					continue;
@@ -296,7 +250,6 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			if (n.nodeType === NODE_TEXT) {
 				const raw = readable(n.textContent);
 				if (!raw.length) return;
-				// Inter-element whitespace (indentation, newlines) → single space
 				const t = /^\s+$/.test(raw) ? " " : raw;
 				runs.push({ text: t, ...inherited });
 				return;

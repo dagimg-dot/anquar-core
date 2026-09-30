@@ -1,7 +1,6 @@
 import type { RawBlock } from "./extractors/block/types.ts";
 import type { Block, ListItem } from "./types.ts";
 
-/** Resolves an <img src> to its bytes, or null when they cannot be found. */
 export type ImageDataResolver = (src: string) => Uint8Array | null;
 
 interface BlockIdentity {
@@ -14,7 +13,6 @@ export function listCharCount(items: ListItem[]): number {
 	return items.reduce((sum, item) => sum + item.content.length, 0);
 }
 
-/** Reader-visible text of a block; "" for images. */
 export function blockText(block: Block): string {
 	switch (block.type) {
 		case "text":
@@ -70,12 +68,6 @@ function toBlock(
 	}
 }
 
-/**
- * Turn extractor output into addressable blocks by attaching ids, chapter
- * position and — for images — the resolved bytes.
- *
- * @param idPrefix — prepended to each block's ordinal to form its id
- */
 export function materializeBlocks(
 	raw: RawBlock[],
 	chapterIndex: number,

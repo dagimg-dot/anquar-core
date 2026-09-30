@@ -7,16 +7,6 @@ import type { ParsedBook } from "./types.ts";
 
 export * from "./anquar-core.ts";
 
-/**
- * Parse an EPUB from a file path or raw bytes.
- *
- * Node/Bun only — it reaches for AdmZip, which is why it lives behind the
- * `anquar-core/node` entry point rather than the main one. Browsers use
- * `parseEpubFromFile`.
- *
- * Uses pluggable extractors for title resolution, image resolution, and block
- * extraction — pass a custom `ParseOptions` to override any strategy.
- */
 export async function parseEpub(
 	input: string | Uint8Array,
 	options?: Partial<ParseOptions>,

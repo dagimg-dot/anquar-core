@@ -1,12 +1,6 @@
 import { parseHTML } from "linkedom";
 import type { TitleExtractor, TitleExtractorParams } from "./types.ts";
 
-/**
- * Extract chapter titles from <h1> or <h2> elements in the XHTML body.
- *
- * This is a fallback for books without NCX entries or with missing
- * NCX titles for some chapters (e.g. front/back matter).
- */
 export class HeadingTitleExtractor implements TitleExtractor {
 	readonly name = "heading";
 

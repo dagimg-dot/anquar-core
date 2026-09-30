@@ -1,6 +1,5 @@
 import type { StyleRun } from "../types.ts";
 
-/** Merge adjacent runs with identical style. */
 export function normalizeRuns(runs: StyleRun[]): StyleRun[] {
 	if (runs.length <= 1) return runs.map((r) => ({ ...r }));
 	const out: StyleRun[] = [];
@@ -21,10 +20,6 @@ export function runsText(runs: StyleRun[]): string {
 	return runs.map((r) => r.text).join("");
 }
 
-/**
- * Squeeze whitespace runs to single spaces and trim both ends of the
- * sequence, so markup indentation never reaches the reader.
- */
 export function collapseRuns(runs: StyleRun[]): StyleRun[] {
 	const out: StyleRun[] = [];
 	let atBoundary = true;

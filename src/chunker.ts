@@ -10,6 +10,8 @@ import type {
 } from "./types.ts";
 import { normalizeRuns, runsText } from "./utils/runs.ts";
 
+const BEFORE_FIRST_BLOCK = -1;
+
 const SENTENCE_END = /[.!?。！？"'”’»）」』]$/;
 
 export function splitSentences(text: string): string[] {
@@ -103,11 +105,6 @@ function sliceRuns(
 	return group;
 }
 
-/**
- * Span of `needle` within `haystack` at or after `from`, tolerating differences
- * in whitespace runs — splitSentences normalises spacing, so an exact match
- * fails on sources whose spacing is irregular.
- */
 function locate(
 	haystack: string,
 	needle: string,
@@ -138,8 +135,6 @@ function splitRunsBySentence(runs: StyleRun[]): StyleRun[][] {
 
 	for (const sentence of sentences) {
 		const span = locate(fullText, sentence, cursor);
-		// A sentence we cannot place would slice from the wrong offset, which
-		// duplicates text and drops the tail. Leave the paragraph whole instead.
 		if (!span) return [runs];
 		cursor = span[1];
 		const group = sliceRuns(runs, offsets, span[0], span[1]);
@@ -189,12 +184,6 @@ function appendRuns(buffer: StyleRun[], incoming: StyleRun[]): void {
 	buffer.push(...rest);
 }
 
-/**
- * Split one paragraph into chunks bounded by config.minChars/maxChars,
- * appending them to `pending`. A tail shorter than minChars is merged back
- * into the preceding chunk instead of becoming a card of its own — which is
- * why chunks land in `pending` rather than the result directly.
- */
 function chunkTextBlock(
 	block: TextBlock,
 	chapterIndex: number,
@@ -211,7 +200,7 @@ function chunkTextBlock(
 		const norm = normalizeRuns(bufferRuns);
 		const trimmed = runsText(norm)
 			.replace(/\s+/g, " ")
-			.replace(/ (?=['’]\w+)/g, "") // collapse "I 've" → "I've"
+			.replace(/ (?=['’]\w+)/g, "")
 			.trim();
 		if (!trimmed) return;
 		pending.push({
@@ -292,7 +281,6 @@ function chunkTextBlock(
 	if (bufferRuns.length > 0) flushBuffer();
 }
 
-/** Break items longer than maxChars into several same-depth items. */
 function* boundedItems(
 	items: ListItem[],
 	maxChars: number,
@@ -308,10 +296,6 @@ function* boundedItems(
 	}
 }
 
-/**
- * Pack a list into cards of at most maxChars. Item boundaries are never
- * crossed, so a card always holds whole bullets.
- */
 function splitList(block: ListBlock, config: ChunkConfig): ListBlock[] {
 	const pages: ListItem[][] = [];
 	let current: ListItem[] = [];
@@ -336,15 +320,6 @@ function splitList(block: ListBlock, config: ChunkConfig): ListBlock[] {
 	}));
 }
 
-/**
- * Chunk a flat list of blocks into card-sized blocks respecting min/max
- * character bounds. Preserves bold/italic through splits and merges.
- * Headings and images pass through untouched — each is already one card.
- *
- * @param blocks — the blocks to chunk (typically from one chapter or article)
- * @param chapterIndex — used for id generation
- * @param config — min/max character bounds
- */
 export function chunkBlocks(
 	blocks: Block[],
 	chapterIndex: number,
@@ -379,16 +354,10 @@ export function chunkBlocks(
 	return result;
 }
 
-/**
- * Chunk an entire parsed book chapter by chapter.
- * Adds chapter header blocks when includeChapterHeaders is enabled.
- */
 export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
 	const result: Block[] = [];
 
 	for (const chapter of book.chapters) {
-		// A chapter that opens with its own heading needs no synthetic one, and
-		// an untitled chapter has nothing truthful to put on the card.
 		const opensWithHeading = chapter.blocks[0]?.type === "heading";
 
 		if (config.includeChapterHeaders && chapter.title && !opensWithHeading) {
@@ -400,7 +369,7 @@ export function chunkBook(book: ParsedBook, config: ChunkConfig): Block[] {
 				runs: [{ text: chapter.title, bold: false, italic: false }],
 				charCount: chapter.title.length,
 				chapterIndex: chapter.index,
-				position: -1, // sorts ahead of every extracted block
+				position: BEFORE_FIRST_BLOCK,
 			});
 		}
 
