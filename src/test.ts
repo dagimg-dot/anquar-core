@@ -304,6 +304,18 @@ async function run() {
 			"rules and ornament lines become scene breaks",
 		);
 
+		const [row, gappy] = extract(
+			"<table><tr><td>Akiko</td><td>Masako’s daughter</td></tr><tr><td>1936</td><td> </td></tr></table>",
+		);
+		assert(
+			row?.type === "text" && row.content === "Akiko · Masako’s daughter",
+			"a table row reads as one line, cells divided",
+		);
+		assert(
+			gappy?.type === "text" && gappy.content === "1936",
+			"an empty cell leaves no divider behind",
+		);
+
 		const [noted] = extract(
 			'<p>In the footnote.<a epub:type="noteref" href="notes.xhtml#n1">fn1</a> The test<sup><a href="#r2">2</a></sup> ran.</p>',
 		);

@@ -68,10 +68,11 @@ const BLOCK_TAGS = new Set([
 	"li",
 	"section",
 	"figure",
-	"td",
-	"th",
+	"tr",
 	"pre",
 ]);
+
+const CELL_SEPARATOR = " · ";
 
 const TITLE_HOST_TAGS = new Set(["p", "div", "section"]);
 
@@ -150,6 +151,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 		const tagOf = (n: WalkNode): string => (n.tagName || "").toLowerCase();
 
 		let pendingTag = "";
+		let cellAwaitingSeparator = false;
 		const titleCandidates = new Set<number>();
 
 		const pushBreak = () => {
@@ -174,6 +176,7 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 			}
 			runs.length = 0;
 			pendingTag = "";
+			cellAwaitingSeparator = false;
 		};
 
 		const isSingleImageWrapper = (n: WalkNode): boolean => {
@@ -315,6 +318,10 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 
 			if (n.nodeType === NODE_TEXT) {
 				const text = readable(n.textContent);
+				if (cellAwaitingSeparator && text.trim()) {
+					runs.push({ text: CELL_SEPARATOR, bold: false, italic: false });
+					cellAwaitingSeparator = false;
+				}
 				if (text) runs.push({ text, ...inherited });
 				return;
 			}
@@ -371,6 +378,10 @@ export class DomWalkerBlockExtractor implements BlockExtractor {
 				if (items.length > 0)
 					blocks.push({ type: "list", ordered: tag === "ol", items });
 				return;
+			}
+
+			if ((tag === "td" || tag === "th") && pendingTag === "tr") {
+				cellAwaitingSeparator = runsText(runs).trim() !== "";
 			}
 
 			const isBlock = BLOCK_TAGS.has(tag);
