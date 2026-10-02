@@ -1,25 +1,46 @@
 {
 	"name": "anquar-core",
 	"version": "0.1.0",
-	"description": "Book content chunker — replaces mindless scrolling with meaningful scrolling",
+	"description": "Parse EPUBs into a flat stream of blocks and lay them out as screen-sized cards",
+	"keywords": [
+		"epub",
+		"ebook",
+		"reader",
+		"parser",
+		"pagination"
+	],
+	"author": "Dagim G. Astatkie",
+	"license": "MIT",
 	"type": "module",
-	"main": "src/anquar-core.ts",
+	"main": "./dist/anquar-core.js",
+	"types": "./dist/anquar-core.d.ts",
 	"exports": {
-		".": "./src/anquar-core.ts",
-		"./node": "./src/node.ts"
+		".": {
+			"types": "./dist/anquar-core.d.ts",
+			"import": "./dist/anquar-core.js"
+		},
+		"./node": {
+			"types": "./dist/node.d.ts",
+			"import": "./dist/node.js"
+		}
 	},
-	"bin": {
-		"anquar": "src/index.ts"
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=18"
 	},
 	"scripts": {
 		"start": "bun run src/index.ts",
+		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"format": "biome format --write",
 		"check": "biome check --write && tsc --noEmit",
 		"test": "bun run src/test.ts",
 		"bench": "bun run bench.ts",
 		"samples": "bun run fetch-samples.ts",
-		"dev": "bun --watch run src/index.ts"
+		"dev": "bun --watch run src/index.ts",
+		"prepublishOnly": "bun run typecheck && bun run build"
 	},
 	"dependencies": {
 		"@mozilla/readability": "^0.6.0",
