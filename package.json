@@ -1,6 +1,7 @@
 {
 	"name": "anquar-core",
 	"version": "0.1.1",
+	"sideEffects": false,
 	"description": "Parse EPUBs into a flat stream of blocks and lay them out as screen-sized cards",
 	"keywords": [
 		"epub",
