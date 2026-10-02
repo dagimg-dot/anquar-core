@@ -1,6 +1,6 @@
 # anquar-core
 
-The engine behind [Anquar](https://github.com/dagimg-dot/anquar), a reader that turns books into a vertical feed. It parses an EPUB into a flat stream of blocks and lays them out as cards that each fill one screen.
+The engine behind [anquar](https://github.com/dagimg-dot/anquar), a reader that turns books into a vertical feed. It parses an EPUB into a flat stream of blocks and lays them out as cards that each fill one screen.
 
 - **Parse:** chapters come back as `text`, `heading`, `list`, `image` and `break` blocks, with inline bold and italic kept as style runs. The book's apparatus (cover, title and copyright pages, contents, praise, notes, index) is left out and listed in `omitted`; dedications, epigraphs and prefaces are marked `frontMatter`.
 - **Paginate:** `paginate` packs blocks into cards from two numbers you measure on the device: how many characters fit on a line and how many lines fit on a card. Paragraphs stay whole where they fit, a paragraph splits at a sentence where a card would otherwise be mostly empty, and a heading is never left at the bottom of a card.
