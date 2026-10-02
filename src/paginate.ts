@@ -70,18 +70,63 @@ function splitOffsets(text: string): number[] {
 	return [...at].sort((a, b) => a - b);
 }
 
+const LETTER = 1;
+const CAPITAL = 2;
+const KNOWN = 4;
+const plane = new Uint8Array(0x10000);
+const astral = new Map<number, number>();
+
+// \p{L} and \p{Lu} without running a regex per line: paging a long book asks this of every character many
+// times over.
+function kindOf(point: number): number {
+	if (point < 128) {
+		if (point >= 65 && point <= 90) return LETTER | CAPITAL;
+		return point >= 97 && point <= 122 ? LETTER : 0;
+	}
+	const known = point < 0x10000 ? plane[point] : astral.get(point);
+	if (known) return known;
+	const char = String.fromCodePoint(point);
+	const kind = /\p{Lu}/u.test(char)
+		? LETTER | CAPITAL
+		: /\p{L}/u.test(char)
+			? LETTER
+			: 0;
+	if (point < 0x10000) plane[point] = kind | KNOWN;
+	else astral.set(point, kind | KNOWN);
+	return kind;
+}
+
 function lineModel(layout: CardLayout) {
 	const capacity = Math.max(6, layout.linesPerCard);
 	const perLine = Math.max(10, layout.charsPerLine * LINE_HEADROOM);
 
 	const textLines = (text: string, width = perLine): number => {
 		let lines = 0;
-		for (const segment of text.split("\n")) {
-			const letters = segment.match(/\p{L}/gu)?.length ?? 0;
-			const capitals = segment.match(/\p{Lu}/gu)?.length ?? 0;
-			const share = letters > 0 ? capitals / letters : 0;
-			const span = segment.length * (1 + (CAPITAL_WIDTH_RATIO - 1) * share);
-			lines += Math.max(1, Math.ceil(span / width));
+		let start = 0;
+		let letters = 0;
+		let capitals = 0;
+		for (let i = 0; i <= text.length; i++) {
+			const code = i < text.length ? text.charCodeAt(i) : 10;
+			if (code === 10) {
+				const share = letters > 0 ? capitals / letters : 0;
+				const span = (i - start) * (1 + (CAPITAL_WIDTH_RATIO - 1) * share);
+				lines += Math.max(1, Math.ceil(span / width));
+				start = i + 1;
+				letters = 0;
+				capitals = 0;
+				continue;
+			}
+			let point = code;
+			if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+				const low = text.charCodeAt(i + 1);
+				if (low >= 0xdc00 && low <= 0xdfff) {
+					point = (code - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
+					i++;
+				}
+			}
+			const kind = kindOf(point);
+			if (kind & LETTER) letters++;
+			if (kind & CAPITAL) capitals++;
 		}
 		return lines;
 	};
@@ -91,7 +136,7 @@ function lineModel(layout: CardLayout) {
 		items.reduce((n, item) => n + textLines(item.content, itemWidth(item)), 0) +
 		ITEM_GAP_LINES * Math.max(0, items.length - 1);
 
-	const cost = (block: Block): number => {
+	const measure = (block: Block): number => {
 		switch (block.type) {
 			case "text":
 				return textLines(block.content);
@@ -106,6 +151,16 @@ function lineModel(layout: CardLayout) {
 			case "break":
 				return BREAK_LINES;
 		}
+	};
+	// Blocks are never changed once made, and paging weighs most of them more than once.
+	const costs = new WeakMap<Block, number>();
+	const cost = (block: Block): number => {
+		let lines = costs.get(block);
+		if (lines === undefined) {
+			lines = measure(block);
+			costs.set(block, lines);
+		}
+		return lines;
 	};
 	const stackCost = (blocks: readonly Block[]) =>
 		blocks.reduce((n, b, i) => n + cost(b) + (i > 0 ? BLOCK_GAP_LINES : 0), 0);
