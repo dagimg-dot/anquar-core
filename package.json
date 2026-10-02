@@ -1,6 +1,6 @@
 {
 	"name": "anquar-core",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Parse EPUBs into a flat stream of blocks and lay them out as screen-sized cards",
 	"keywords": [
 		"epub",
@@ -11,6 +11,14 @@
 	],
 	"author": "Dagim G. Astatkie",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/dagimg-dot/anquar-core.git"
+	},
+	"homepage": "https://github.com/dagimg-dot/anquar-core#readme",
+	"bugs": {
+		"url": "https://github.com/dagimg-dot/anquar-core/issues"
+	},
 	"type": "module",
 	"main": "./dist/anquar-core.js",
 	"types": "./dist/anquar-core.d.ts",
