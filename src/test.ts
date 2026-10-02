@@ -9,7 +9,12 @@ import { parseOpf } from "./epub/opf.ts";
 import { parseArticle } from "./everything/article.ts";
 import { DomWalkerBlockExtractor } from "./extractors/block/dom-walker.ts";
 import { parseEpub } from "./node.ts";
-import { cardLines, PHONE_LAYOUT, paginate } from "./paginate.ts";
+import {
+	cardLines,
+	carriesIntoNext,
+	PHONE_LAYOUT,
+	paginate,
+} from "./paginate.ts";
 import { classifySections, type SectionInput } from "./sections.ts";
 import { hardSplit, splitSentences } from "./sentences.ts";
 import type { Block, Card, CardLayout, ParsedBook } from "./types.ts";
@@ -642,6 +647,11 @@ async function run() {
 			part.length === 1 && part[0].blocks.length === 3,
 			"a part title heads the first card of the chapter after it",
 		);
+		assert(
+			carriesIntoNext(chapterOf(0, "<h1>Part One</h1>")) &&
+				!carriesIntoNext(chapterOf(1, `<h2>1</h2><p>${sentence(1, 8)}</p>`)),
+			"a part title carries into the next chapter, a chapter ending in text does not",
+		);
 
 		const items = Array.from(
 			{ length: 12 },
@@ -800,6 +810,20 @@ async function run() {
 			for (const [label, layout] of LAYOUTS) {
 				const cards = paginate(book.chapters, layout);
 				const where = `${name} (${label})`;
+
+				const runs: (typeof book.chapters)[] = [];
+				book.chapters.forEach((ch, i) => {
+					if (i > 0 && carriesIntoNext(book.chapters[i - 1]))
+						runs.at(-1)?.push(ch);
+					else runs.push([ch]);
+				});
+				assert(
+					same(
+						runs.flatMap((run) => paginate(run, layout)),
+						cards,
+					),
+					`${where}: paged in runs that start after chapters that don't carry, the cards are the same`,
+				);
 
 				assert(
 					unspaced(cards.flatMap((c) => c.blocks.map(blockText)).join("")) ===

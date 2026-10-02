@@ -8,6 +8,7 @@ export type { PageableChapter } from "./paginate.ts";
 export {
 	BLOCK_GAP_LINES,
 	cardLines,
+	carriesIntoNext,
 	HEADING_SCALE,
 	ITEM_GAP_LINES,
 	PHONE_LAYOUT,

@@ -185,6 +185,16 @@ export function cardLines(
 }
 
 /**
+ * Whether paging this chapter leaves something for the next: a closing heading, such as a part title, opens
+ * the next chapter's first card. A book paged in runs that start after chapters that don't carry is paged
+ * exactly as it would be whole.
+ */
+export function carriesIntoNext(chapter: PageableChapter): boolean {
+	const laid = chapter.blocks.filter((b) => b.type !== "break");
+	return laid.length === 0 || laid[laid.length - 1].type === "heading";
+}
+
+/**
  * Lay blocks out as cards that each fill one screen: whole paragraphs where
  * they fit, a paragraph split at a sentence only where a card would otherwise
  * be left mostly empty, headings on the card with what they open. A chapter
